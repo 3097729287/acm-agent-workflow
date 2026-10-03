@@ -2,7 +2,7 @@
 
 **An AI-agent pipeline for competitive-programming upsolving: solutions, verification, and archiving.** It turns "write solutions and forget about them" into a pipeline with machine-checked gates: fetch statements → write code → four-tier verification → render the write-up → format gate → archive reconciliation, plus a status tracker for every problem you upsolve (with a GUI).
 
-[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) ｜ [中文](README.md) ｜ Windows-first (scripts are pure Python, cross-platform friendly) ｜ MIT License
+[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) ｜ [中文](README.md) ｜ Windows-first (GUI) ｜ Core pipeline CI-green on Ubuntu / macOS / Windows × Python 3.9 / 3.13 ｜ MIT License
 
 ---
 
@@ -155,7 +155,7 @@ No hard-coded paths: set `AGENT_CP_TOOLS` / `AGENT_CP_CONFIG` to relocate the to
 
 **No g++ / node?** Fine. Without g++ the verification tiers are honestly reported as "unverified"; node only powers the KaTeX render check (that item reports "N/A").
 
-**Non-Windows?** The scripts are pure Python (stdlib-first); the core pipeline is cross-platform. The GUI and some `.cmd` helpers are Windows-oriented. All paths come from config.
+**Non-Windows?** The core pipeline is CI-green on Ubuntu / macOS / Windows × Python 3.9 / 3.13 (badge above): env check, demo gate, index sync, four-tier re-verification and the 17-check format gate all run on Linux/macOS. The Tkinter GUI and some `.cmd` helpers are Windows-oriented. All paths come from config.
 
 **KaTeX render check:** `cd tools && npm install katex` (optional).
 

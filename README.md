@@ -2,7 +2,7 @@
 
 **给 AI agent 用的算法竞赛「题解 + 补题」流水线。** 把「写完题解就烂尾」变成一条有机器闸门的流水线：抓题面 → 写代码 → 四档验证 → 生成题解 → 格式自检 → 归档对账，外加一个跟踪每道题掌握程度的状态表（带图形端）。
 
-[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) ｜ [English](README.en.md) ｜ Windows 优先（脚本纯 Python，跨平台可用）｜ MIT License
+[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) ｜ [English](README.en.md) ｜ Windows 优先（图形端）｜ 核心流程三平台 CI 全绿：Ubuntu / macOS / Windows × Python 3.9 / 3.13 ｜ MIT License
 
 ---
 
@@ -165,7 +165,7 @@ python tools/status_gui.py       # 图形端（Tkinter）
 
 **没有 g++ / node 能用吗？** 能。没有 g++ 时验证档如实降级为「未验证」（流程允许，但要写明）；node 只影响 KaTeX 公式渲染检查（第 17 项打「不适用」）。
 
-**非 Windows 能用吗？** 脚本是纯 Python（标准库为主），核心流程跨平台；`status_gui.py` 与部分 `.cmd` 是 Windows 向的。路径都走 config，Linux/macOS 下把 `config.json` 指过去即可。
+**非 Windows 能用吗？** 核心流程三平台 CI 全绿（Ubuntu / macOS / Windows × Python 3.9 / 3.13，见顶部徽章）：环境体检、示例闸门、索引同步、四档复验、17 项格式闸都在 Linux/macOS 上跑过。`status_gui.py` 的图形端与部分 `.cmd` 是 Windows 向的。路径都走 config，指过去即可。
 
 **公式渲染检查怎么装？** `cd tools && npm install katex`（可选）。
 
