@@ -24,6 +24,9 @@
      —— **绝不猜**。多平台混排时别拿裸场次号当键（Codeforces Round 161 ≠ 牛客 Round 161）。
   5. `is_junk(rel)` / `walk_files(base)` / `copy_tree(...)` —— 题解包（导入导出）
      共用的垃圾过滤与收集：目录名命中 JUNK_DIRS 整棵跳过、后缀命中 JUNK_SUFFIX 剔。
+  6. `run_sibling(script, args)` —— 跑 `tools\\` 里的兄弟脚本 → 退出码：源码环境起
+     子进程（与手跑一致），frozen（PyInstaller 打的 exe，没有解释器可用）进程内
+     import 调 `main()` —— 两种形态行为对齐，capture=True 时都把输出抓成字符串。
 
 自检：`python toolutil.py`（跑一组断言，全过打印 OK）。
 """
@@ -32,9 +35,15 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, "frozen", False):
+    # PyInstaller 打包的 exe：代码在临时解包目录里，资源（config.json / knowledge\ /
+    # demo\）都在 **exe 旁边** —— REPO_ROOT 跟着 exe 走，别去找一次性临时目录。
+    REPO_ROOT = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 # ---------------------------------------------------------------- 配置
@@ -262,6 +271,48 @@ def parse_contest(s):
         if m:
             return name, int(m.group(1))
     return None, None
+
+
+# ---------------------------------------------------------------- 跑兄弟脚本
+def run_sibling(script, args, capture=False):
+    """跑 `tools\\` 下的兄弟脚本 → 退出码（capture=True 时 → (退出码, 输出文本)）。
+
+    源码环境 = 起子进程跑 `python tools\\<script> ...`（输出继承控制台 / 捕获，与手跑
+    完全一致）；frozen（PyInstaller 打的 exe 里没有解释器可用）= 进程内 import 后调
+    `main()`，capture=True 时临时把 stdout / stderr 换成字符串缓冲——调用方在两种
+    环境看到的行为对齐。子脚本清单必须随 exe 一起打包（见打包说明的 --hidden-import）。
+    """
+    if not getattr(sys, "frozen", False):
+        cmd = [sys.executable, os.path.join(REPO_ROOT, "tools", script)] + list(args)
+        if capture:
+            p = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT,
+                               encoding="utf-8", errors="replace")
+            return p.returncode, (p.stdout or "") + (p.stderr or "")
+        return subprocess.run(cmd, cwd=REPO_ROOT).returncode
+    # frozen：没有解释器 → 进程内调用（模块已随 exe 打包）
+    import importlib
+    import io
+    import traceback
+    buf = io.StringIO() if capture else None
+    old = (sys.stdout, sys.stderr) if buf is not None else None
+    if old:
+        sys.stdout = sys.stderr = buf
+    try:
+        # import 也放进 try：子脚本**模块顶层**出错（如自己调 stdout.reconfigure）
+        # 要跟子进程里一样得到「traceback + 退出码 1」，而不是把调用方整个炸掉。
+        mod = importlib.import_module(script[:-3] if script.endswith(".py") else script)
+        rc = mod.main(list(args))
+    except SystemExit as e:                       # 子脚本个别处若调了 exit()：当退出码
+        rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+    except Exception:
+        traceback.print_exc()                     # 与子进程的 stderr traceback 对齐
+        rc = 1
+    finally:
+        if old:
+            sys.stdout, sys.stderr = old
+    if buf is not None:
+        return rc, buf.getvalue()
+    return rc
 
 
 # ---------------------------------------------------------------- 自检
