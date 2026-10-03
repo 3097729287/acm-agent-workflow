@@ -130,7 +130,7 @@ def sync_index(path, recs, root, apply_):
         return new, None
     b = backup(path, os.path.dirname(path))
     open(path, "w", encoding="utf-8", newline="\n").write(new)
-    return new, "已写盘（备份 %s）" % b
+    return new, ["已写盘（备份 %s）" % b]
 
 
 # ------------------------------------------------------------------ 08 表
@@ -267,7 +267,7 @@ def main(argv=None):
                 print("    " + x)
             if len(d) > 120:
                 print("    …（全 diff 共 %d 行，已截断）" % len(d))
-        for x in note or []:
+        for x in ([note] if isinstance(note, str) else (note or [])):
             print("    [提醒] %s" % x)
     if errs:
         return 2

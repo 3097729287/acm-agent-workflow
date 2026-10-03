@@ -31,7 +31,7 @@ This repo hands the whole workflow to an **AI agent** (Claude Code / Codex / any
 
 This isn't a slide deck — it's the author's daily pipeline (as of 2026-10-03):
 
-- **9 NowCoder weekly rounds** (Round 123–163) processed through the full six steps; Round 163 ships verbatim in this repo's `demo\`;
+- **9 NowCoder weekly rounds** (Round 123–163) processed through the full six steps; Round 163 (a full round) and Round 161's C–E (a mini round showing the cross-round ledger) ship in this repo's `demo\`;
 - **43 problems** moving through the upsolve status table (can't → to-rewrite → reproduced-AC → solved-independently → consolidated);
 - **32** four-tier verification drivers, re-runnable with the code;
 - **57 archive records** across **31 algorithm folders**.
@@ -45,24 +45,27 @@ cd acm-agent-workflow
 python install.py           # writes config.json (points at the bundled demo) + env check + demo gate
 ```
 
-The check prints Python / g++ / node status and then runs the demo gate — `archive_check.py Round163` reconciling the bundled example, **exit code 0**:
+The check prints Python / g++ / node status and then runs the demo gate — `archive_check.py` reconciling both bundled rounds, **exit code 0**:
 
 ```
   Python      3.14.7  OK
   g++         g++ (Rev4, Built by MSYS2 project) 16.2.0  OK
   node        v24.18.1  OK
   == 示例闸门：archive_check.py Round163（自带示例数据）==
-  [通过] 退出码 0（0 = 四处对账通过）
+  [通过] Round163 退出码 0（0 = 四处对账通过）
+  == 示例闸门：archive_check.py Round161（自带示例数据）==
+  [通过] Round161 退出码 0（0 = 四处对账通过）
 ```
 
 (Script output is Chinese — the project is CN-first. g++ and node are optional: without g++ the verification tiers are honestly reported as "unverified"; node only powers the KaTeX math render check.)
 
 <img src="docs/demo-install.gif" width="900" alt="Recorded run of python install.py --check: env check + demo gate, exit code 0">
 
-Then run a full four-tier verification on the bundled example (a complete round from NowCoder Weekly Contest 163):
+Then run a full four-tier verification on the bundled examples (a complete round, plus a three-problem mini round, from NowCoder Weekly):
 
 ```bash
 python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
+python demo/题解/牛客周赛/Round161/A-F/C/verify_c.py
 ```
 
 ```
@@ -104,9 +107,9 @@ Layout of one self-contained round:
 
 ```
 <data-root>\
-├── 题解\牛客周赛\Round163\
-│   ├── Round163题解.md          <- the deliverable editorial
-│   ├── B-G\B\                   <- per problem: solution + brute + verify driver (+ viz scripts)
+├── 题解\牛客周赛\RoundN\        <- in demo: Round163 (full) + Round161 (C~E mini round)
+│   ├── RoundN题解.md            <- the deliverable editorial
+│   ├── <range>\<letter>\        <- per problem: solution + brute + verify driver (+ viz scripts)
 │   └── _work\                   <- disposables (statements/samples), regenerable
 ├── 算法\                        <- archive: one condensed record per problem, grouped by algorithm
 ├── 索引\题解算法索引.md          <- full index (round sections are script-generated)
@@ -186,7 +189,9 @@ No hard-coded paths: set `AGENT_CP_TOOLS` / `AGENT_CP_CONFIG` to relocate the to
 
 ## Bundled example
 
-`demo\` is one complete round (NowCoder Weekly 163, problems B–G): editorial, per-problem code, verify drivers (B shows the framework-style `verify_b.py`; F is a self-contained script), six archive records, indexes, status table. Both `install.py --check` and `archive_check.py Round163` run against it.
+`demo\` holds two rounds: NowCoder Weekly 163, problems B–G (a complete round — editorial, per-problem code, verify drivers where B shows the framework-style `verify_b.py` and F is a self-contained script), and Round 161's C–E (a mini round whose three problems all use framework-style drivers). Together: nine archive records, indexes, status table. Both `install.py --check` and `archive_check.py Round163` / `Round161` run against it.
+
+The second round is not padding: it demonstrates the **cross-round ledger** — once a second round lands in the same algorithm folders, 《已讲过概念清单》 must register newly taught concepts with "first appearance = the earliest round" and strike the entries that were finally taught (`knowledge\09-已讲过概念清单.md` shows the real wording).
 
 A deliberately broken counterpart ships in `examples\`: the same format gate flags it with eight red items and exit code 1 — run it once and you can see exactly what the gate catches.
 

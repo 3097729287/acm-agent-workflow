@@ -83,15 +83,20 @@ def check(args):
     # 数据根 + 示例闸门
     root = args.data_root or _config_data_root()
     print("  数据根      %s" % root)
-    demo_round = os.path.join(root, "题解", "牛客周赛", "Round163")
-    if os.path.isdir(demo_round):
-        exe = os.path.join(TOOLS, "archive_check.py")
+    exe = os.path.join(TOOLS, "archive_check.py")
+    demo_rounds = [r for r in ("Round163", "Round161")
+                   if os.path.isdir(os.path.join(root, "题解", "牛客周赛", r))]
+    if demo_rounds:
         sys.stdout.flush()  # 子进程直接继承控制台，先把自己的行刷出去，顺序才不乱
-        print("  == 示例闸门：archive_check.py Round163（自带示例数据）==")
-        p = subprocess.run([sys.executable, exe, "Round163"], cwd=REPO)
-        print("  [%s] 退出码 %d（0 = 四处对账通过）" % ("通过" if p.returncode == 0 else "★ 未通过", p.returncode))
-        return p.returncode
-    print("  （数据根里没有 Round163 示例，跳过示例闸门；想看示例把 data_root 指回 ./demo）")
+        rc = 0
+        for name in demo_rounds:
+            print("  == 示例闸门：archive_check.py %s（自带示例数据）==" % name)
+            p = subprocess.run([sys.executable, exe, name], cwd=REPO)
+            print("  [%s] %s 退出码 %d（0 = 四处对账通过）"
+                  % ("通过" if p.returncode == 0 else "★ 未通过", name, p.returncode))
+            rc = rc or p.returncode
+        return rc
+    print("  （数据根里没有示例场次，跳过示例闸门；想看示例把 data_root 指回 ./demo）")
     return 0
 
 
