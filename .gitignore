@@ -1,0 +1,27 @@
+# 本地配置（每人不同，不入库；由 install.py 生成）
+config.json
+
+# 备份目录（toolutil.backup_to_repo 的落点）
+.backups/
+
+# Python
+__pycache__/
+*.pyc
+
+# Node（KaTeX 检查器依赖，npm install 后生成）
+tools/node_modules/
+tools/package.json
+tools/package-lock.json
+
+# C++ 编译产物
+*.exe
+
+# 验证跑完会重建的耗材（可随手删、重跑即回来）
+demo/**/_work/raw/
+demo/**/_work/题面/
+demo/**/_work/from_md/
+demo/**/__pycache__/
+
+# 编辑器
+.vscode/
+.idea/

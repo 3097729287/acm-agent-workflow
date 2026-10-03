@@ -1,0 +1,5 @@
+{
+  "data_root": "./demo",
+  "backup_root": "./.backups",
+  "desktop_copy_dir": null
+}
