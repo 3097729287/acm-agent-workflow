@@ -134,9 +134,9 @@ python tools/status_gui.py       # 图形端（Tkinter）
 ```
 
 筛选（`--knowledge` / `--status` / `--difficulty`，三条 AND）= 命令行的「筛出 N 题」清单，
-图形端筛选区**引的是同一份实现** —— 两边同条件必然同一份结果。
+图形端筛选**引的是同一份实现** —— 两边同条件必然同一份结果。
 
-图形端键位：`1`~`6` 直接改状态 ｜ `Enter` 浮层 ｜ `Ctrl+Z` 连撤 ｜ `Shift+Enter` 开原题 ｜ `F11` 全屏。只动目标行、写前自动备份、非法状态拒写。
+图形端键位：`1`~`6` 直接改状态 ｜ `Enter` 浮层 ｜ `Ctrl+Z` 连撤 ｜ `Shift+Enter` 开原题 ｜ `F11` 全屏 ｜ 搜索框 `↓` 展开筛选面板（知识点 / 难度 / 状态多选）。只动目标行、写前自动备份、非法状态拒写。
 
 <img src="docs/demo-gui.gif" width="900" alt="status_gui.py 实跑：按数字键改状态 → Ctrl+Z 连撤 → 打开原题与归档记录">
 

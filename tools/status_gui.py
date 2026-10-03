@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""status_gui.py —— 题目状态跟踪窗口 v13（tkinter，纯标准库）
+r"""status_gui.py —— 题目状态跟踪窗口 v15（tkinter，纯标准库）
 
 用法：
     pythonw status_gui.py                     # 打开窗口（默认读 <数据根>/题解/题目状态.md）
@@ -19,10 +19,11 @@ r"""status_gui.py —— 题目状态跟踪窗口 v13（tkinter，纯标准库�
             行里的题换成别的；越界贴最后一行）；搜索才「跟题」（按 场次 + 题号）
             改完状态（回车确认 / 数字直选）选中行自动下移一行；浮层按 Esc 取消则不移动
             选中行直接按 1~6 = 改状态（不开浮层），v12 起；焦点在搜索框时数字照常打进输入框
-    Tab / Shift+Tab 在「主页面 / 搜索 / 知识点 / 难度 / 状态」五个焦点之间轮换（v13；其余控件 takefocus 全关）
+    Tab / Shift+Tab 在「主页面 / 搜索」两站之间轮换（v14；下拉面板里各行都算「搜索」站，其余控件 takefocus 全关）
     ← / → 在一整条横排上左右走：总表 → 1 待重写 → 2 待补题 → 3 复习 → 4 抽检，两头绕回（v6）
-    / 搜索 ｜ Esc 从搜索框回主页面（搜索框里先清空）
-    搜索框里 Enter / ↓ = 跳回总表看结果（v5：搜索词保留）
+    / 搜索 ｜ 搜索框里 ↓ 展开筛选下拉（再按 ↓ 进「知识点」）、↑ 收起（v14）
+    搜索框里 Enter = 跳回总表看结果（v5：搜索词保留；v14 起 ↓ 改作展开下拉）
+    Esc 逐层退回（v14）：框里有字先清空 → 上退一行 → 收起面板 → 回主页面
     搜索（v10；v12 起含难度）：忽略空格 + 多词都要命中（查 场次 + 题名 + 知识点 + 难度，大小写不敏感）
     F5 从磁盘重读 ｜ F11 全屏开关（再按一次退出；任何焦点都生效）（v11）
     ? 快捷键一览（v7：页签栏已整条隐藏，切页只走 ← / →）
@@ -165,14 +166,14 @@ v13（2026-10-03 批次 C）：
         **一条都不匹配**并在 `筛出 N 题` 后面点名（跟命令行的 `★` 同一口径）。
       筛选开着时右端显示 `筛出 N 题`（N = 当前可见行数 = 筛选 ∧ 搜索的交集）；清空后
       这行字消失 —— v10 删掉的常驻「搜出 M 题」不复活。
-    ② **端点**：两个筛选框里 Esc = 清掉这一格 + 回表格、Enter / ↓ = 带条件跳回总表
-      （跟搜索框同风格）；状态按钮上 ← / → 在 6 个按钮里走、空格 / Enter 选中 / 取消、
-      Esc 回表格。
-    ③ **Tab 轮换变 5 站**：主页面 → 搜索 → 知识点 → 难度 → 状态组（整组算一站，组内
-      用 ← / → 走；Shift+Tab 反向）—— v9 / v6 的两站口径作废。输入法守卫的 keep 名单
-      同步收进两个新输入框（v8 规则不变：在表 / 清单上按键不弹输入法）。
+    ② **端点**：两个筛选框里 Enter = 带条件跳回总表（跟搜索框同风格）；Esc 逐层退回
+      （v14 改；原「清这一格 + 回表格」作废 —— 翻成了 v14 那张逐层退回表）。
+    ③ **Tab 轮换变 5 站**（v13）：主页面 → 搜索 → 知识点 → 难度 → 状态组（整组算一站，
+      Shift+Tab 反向）—— v9 / v6 的两站口径作废。输入法守卫的 keep 名单同步收进两个
+      新输入框（v8 规则不变：在表 / 清单上按键不弹输入法）。（v14 起这 5 站又并回 2 站。）
     （v9 删的是「状态筛选下拉框」那一套；v13 不是把它搬回来：没有下拉、没有 `F` 键，
-      也没有新的状态取值 —— 是输入框 + 多选按钮 + 与命令行共用一份匹配实现。）
+      也没有新的状态取值 —— 是输入框 + 多选按钮 + 与命令行共用一份匹配实现。
+      v14 起筛选整体收进搜索框下面的下拉面板。）
 v13（2026-10-03 批次 B）：
     **题解包三个文件级入口**（菜单栏「题解包」；只动菜单 / 入口区，不碰搜索筛选区）：
       ① 导入题解包…：选 zip / 已解压的目录 → 后台跑 `import_solution` dry（不写盘）→
@@ -186,6 +187,34 @@ v13（2026-10-03 批次 B）：
       统一这条路径（子齿轮由 `toolutil.run_sibling` 在 frozen 下同样进程内化）。
       无窗口命令行版（CI / 自动化）：`--pack-import <包> [--apply]` /
       `--pack-check <包>` / `--pack-export Round163[-G] [-o 出.zip] [--log 日志]`。
+
+v14（2026-10-03）：
+    **搜索 + 筛选合并成一个「下拉」**：v13 的第二行筛选区整行删除，内容并进搜索框下面的
+    下拉面板（行序 = 搜索 / 知识点 / 难度 / 状态；展开时面板占位、**表格整体下移**，收起恢复）。
+    ① 「状态」不再是 6 个小按钮，改成**多选清单**（`lb_status`：`1. 未做`…`6. 巩固` 六行，
+       跟状态浮层同一个选项框结构）—— ↑↓ 移光标、空格 / Enter / 1~6 勾选 / 取消，
+       勾选 = 强调色底（多选并集，再与知识点 / 难度 / 搜索取交集）。
+    ② 匹配逻辑一个字没换：仍是 `filter_state()` → `status_report.filter_rows`
+       （`status_on` / `var_know` / `var_diff` 属性名照旧，命令行同条件必同一结果）。
+       「筛出 N 题」挪进面板底部；**面板收起时同一行字挂到窗口第一行右端**（`var_hits_min`）
+       —— 筛选开着却不给提示的状态不许出现。
+    ③ 键位：搜索框 ↓ = 展开（第一下只展开、焦点留在框里能接着打字；再按 ↓ 才进「知识点」）、
+       ↑ = 收起；面板里 ↑↓ 逐行走（搜索 → 知识点 → 难度 → 状态）、Esc 逐层退回
+       （框里有字先清空 → 上退一行 → 状态 → 难度 → 搜索框 → 收面板 → 回主页面）；
+       离开搜索站（Tab 走 / Enter 跳回总表）自动收面板，条件一个字不动。
+    ④ Tab 轮换：v13 五站 → v14 两站（主页面 ⇄ 搜索）；面板里任意一行都按「搜索」站算。
+
+v15（2026-10-03）：
+    **只动观感，键位与匹配逻辑一个字没改**（用户点名：输入框整洁一点、搜索框长一点）：
+    ① 搜索框宽 13 → **26**（约两倍，能看全「Round 163 E」这类词；固定宽，不随窗口伸缩）。
+    ② 四行标签统一 3 个字宽（`搜　索` / `知识点` / `难　度` / `状　态`，两字的中间插一个
+       全角空格）—— 搜索框与面板里两个输入框、状态清单的**左缘排成一条竖线**。
+    ③ 输入框格式：`Nav.TEntry` 统一 **padding=(7, 5)**（字不贴边、三个框一样高）。
+    ④ **灰字占位提示**（`_add_placeholder`）：框空着且没焦点时显示浅灰提示语
+       （搜索「场次 / 题名 / 知识点 / 难度」、知识点「如 DP、二分」、难度「如 1700-1900」），
+       聚焦或打字即隐。提示是**浮在输入框上的 Label**，不写进 textvariable —— 不参与匹配。
+    ⑤ 面板底部「清空」按钮**删除**（v15 末用户点名「去掉清空选项」；底排只留「筛出 N 题」，
+       要清条件走 Esc 逐层退回）；第一行元素间距调匀。
 
 记住上次（v4）：
     关窗时把 窗口大小 + 位置 + 排序字段 + 升/降序 存成脚本同目录的 `status_gui.config.json`
@@ -247,10 +276,10 @@ HEADER = list(NEW_HEADER)
 
 SORTABLE = ("场次", "难度", "日期")              # 可排序的三列（v3 起取消「知识点」）
 KEY_TABLE = """\
-Tab / Shift+Tab    焦点轮换：主页面 → 搜索 → 知识点 → 难度 → 状态（Shift+Tab 反向）
+Tab / Shift+Tab    焦点轮换：主页面 ⇄ 搜索（面板里各行都算「搜索」站；Shift+Tab 反向）
 ← / →              横着走：总表 → 1 待重写 → 2 待补题 → 3 复习 → 4 抽检，两头绕回
 /                  跳到搜索框
-Esc                从搜索框 / 筛选框回主页面（框里先清空）
+Esc                逐层退回：框里有字先清空 → 上退一行 → 收起面板 → 回主页面
 ↑ ↓                移动选中行
 PgUp / PgDn        翻页
 1 ~ 6              选中行直接改状态（不开浮层）
@@ -262,8 +291,8 @@ S / R              换排序字段 / 反转升降序（总表页）
 F5                 从磁盘重读
 F11                全屏开关（再按一次退出）
 ?                  快捷键一览
-筛选区             知识点 / 难度 框 + 状态按钮：多条件组合，只筛总表 ｜ 清空 = 全清
-状态按钮上          ← / → 换按钮 ｜ 空格 / Enter 选中 / 取消 ｜ Esc 回表格"""                   # 与 说明.md 的键位表一字不差（v13：17 行；裸 F 那行随 v9 筛选删除，F5 / F11 不算）
+下拉面板           搜索框 ↓ 展开 / ↑ 收起：知识点 · 难度 框 + 状态多选，只筛总表
+面板里 ↓ / ↑       知识点 → 难度 → 状态 逐行走 ｜ 状态列表：空格 / Enter / 1~6 勾选 · Esc 退一层"""                   # 与 说明.md 的键位表一字不差（v14：17 行；v13 的「筛选区 / 状态按钮上」两行并进面板两行，裸 F 那行随 v9 筛选删除，F5 / F11 不算；v15：观感改 + 删掉「清空 = 全清」尾句——按钮同版删除）
 TODAY_COLS = ["场次", "题号", "题名", "知识点", "难度", "日期"]
 EDITABLE = ("状态", "日期")                      # 唯一允许改的两格
 CELL_STATE = HEADER.index("状态")
@@ -344,6 +373,8 @@ C_TEXT = "#1f2430"
 C_MUTED = "#667085"
 C_LINE = "#b9c3d6"          # v6：输入控件的常态边框（聚焦时换成强调色 C_ACCENT）
 C_SELECT_OFF = "#c9d4e6"    # v6：失焦时选中行的底色（聚焦时是 C_ACCENT —— 一眼看出焦点在哪）
+C_PLACEHOLDER = "#9aa6ba"   # v15：空输入框里的灰字占位提示（比 C_MUTED 再浅一档）
+LABEL_PAD = "　"            # v15：全角空格 —— 两字标签插一个 = 三字宽，四行控件的左缘才能对齐
 
 # 场次号：优先用 tools 侧导出的正则；tools 正在做「多平台场次键」重构、这个常量可能还没回来，
 # 兜底用本地的同款正则（= 改造前的 SR.ROUND_RE：取场次文本里第一串数字），别让 GUI 因 tools 改版打不开。
@@ -962,6 +993,7 @@ class StatusGui(object):
         self._last_change = None             # v6~v11：只记一步 → v12 起 = 栈顶那份（栈空即 None）
         self.last_windowed_geometry = None   # v11：进全屏前记下的窗口态 geometry（全屏中关窗存这份）
         self._pack_job = None                # v13：正在跑的题解包后台任务（同时只许一个）
+        self._ph_syncs = []                  # v15：三个占位提示的同步函数（程序改空 var 后手动喊一声）
 
         root.title("题目状态跟踪表")
         root.geometry("1320x800")
@@ -972,7 +1004,7 @@ class StatusGui(object):
 
         self._make_menu()                   # v13：菜单栏（题解包：导入 / 导出 / 一键校验）
         self._make_head()                   # v9：第一行 = 搜索 + 统计 + 消息（页头两行 / 底部行都删了）
-        self._make_filter_bar()             # v13：第二行 = 筛选区（知识点 / 状态 / 难度）
+        self._make_dropdown()               # v14：搜索框下的筛选下拉（原 v13 第二行筛选区整行并进来；默认收起）
 
         self.nb = ttk.Notebook(root, takefocus=0)   # v6：页签不进 Tab 轮换（鼠标点不受影响）
         self.nb.pack(fill="both", expand=True, padx=12, pady=(2, 4))
@@ -983,7 +1015,7 @@ class StatusGui(object):
         self._make_all_tab()
         self._make_today_tab()
 
-        # v13：Tab / Shift+Tab = 五站焦点轮换（主页面 → 搜索 → 知识点 → 难度 → 状态；见 _rotate_focus）
+        # v14：Tab / Shift+Tab = 两站焦点轮换（主页面 ⇄ 搜索；下拉面板里各行都算「搜索」站，见 _rotate_focus）
         root.bind("<Tab>", lambda e: self._rotate_focus(1))
         root.bind("<Shift-Tab>", lambda e: self._rotate_focus(-1))
         # v6 追加：Ctrl+Z 撤销挂 root —— 任何焦点下都生效（Entry 没有自己的 Ctrl+Z，不会打架）。
@@ -1118,8 +1150,9 @@ class StatusGui(object):
                foreground=[("selected", "focus", "#ffffff"),
                            ("selected", "!focus", C_TEXT)])
         # v6 / v9：唯一的输入控件（搜索框）焦点指示 = 强调色边框 + 淡蓝底（没焦点时灰边框 + 白底）
+        # v15：统一内边距（7, 5）—— 字不贴边、三个输入框一样高（占位提示的 x 偏移也照这个来）
         st.configure("Nav.TEntry", fieldbackground=C_PANEL, bordercolor=C_LINE,
-                     lightcolor=C_LINE, darkcolor=C_LINE)
+                     lightcolor=C_LINE, darkcolor=C_LINE, padding=(7, 5))
         st.map("Nav.TEntry",
                bordercolor=[("focus", C_ACCENT)], lightcolor=[("focus", C_ACCENT)],
                darkcolor=[("focus", C_ACCENT)],
@@ -1135,18 +1168,20 @@ class StatusGui(object):
         """
         head = tk.Frame(self.root, bg=C_BG)
         head.pack(fill="x", padx=16, pady=(10, 2))
-        self.lbl_search = tk.Label(head, text="搜索", bg=C_BG, fg=C_TEXT,
-                                   font=(self.fam, 13))       # v7：去掉「（场次 / 题名 / 知识点）」
+        self.lbl_search = tk.Label(head, text="搜" + LABEL_PAD + "索", bg=C_BG, fg=C_TEXT,
+                                   font=(self.fam, 13))       # v7：去掉「（场次 / 题名 / 知识点）」；v15：插全角空格 = 三字宽（与面板三行标签对齐）
         self.lbl_search.pack(side="left")
         self.var_search = tk.StringVar(value="")
-        self.ent_search = ttk.Entry(head, textvariable=self.var_search, width=13,
+        self.ent_search = ttk.Entry(head, textvariable=self.var_search, width=26,
                                     font=(self.fam, 13),
-                                    style="Nav.TEntry")         # v6：聚焦时边框 / 底色变强调
-        self.ent_search.pack(side="left", padx=(6, 14))
+                                    style="Nav.TEntry")         # v6：聚焦时边框 / 底色变强调；v15：宽 13 → 26
+        self.ent_search.pack(side="left", padx=(6, 16))
         self.ent_search.bind("<KeyRelease>", lambda e: self.refresh_view())
         self.ent_search.bind("<Return>", self._jump_to_table)   # v5：Enter 跳回总表（搜索词保留）
-        self.ent_search.bind("<Down>", self._jump_to_table)     # v5：↓ 同效
-        self.ent_search.bind("<Escape>", self._esc_search)
+        self.ent_search.bind("<Down>", self._dropdown_open)     # v14：↓ 展开筛选下拉（第一下只展开）
+        self.ent_search.bind("<Up>", self._dropdown_hide)       # v14：↑ 收起（没展开时什么也不做）
+        self.ent_search.bind("<Escape>", self._esc_search)      # v14：逐层退回（见 _esc_search）
+        self._add_placeholder(self.ent_search, "场次 / 题名 / 知识点 / 难度")   # v15：空框灰字提示
 
         self.var_count = tk.StringVar(value="")
         self.lbl_count = tk.Label(head, textvariable=self.var_count, bg=C_BG, fg=C_TEXT,
@@ -1157,77 +1192,155 @@ class StatusGui(object):
         self.lbl_msg = tk.Label(head, textvariable=self.var_msg, bg=C_BG, fg=C_MUTED,
                                 font=(self.fam, 11), anchor="e")
         self.lbl_msg.pack(side="right")                         # v9：消息挪到这一行最右端
+
+        self.var_hits_min = tk.StringVar(value="")
+        self.lbl_hits_min = tk.Label(head, textvariable=self.var_hits_min, bg=C_BG, fg=C_ACCENT_DARK,
+                                     font=(self.fam, 11), anchor="e")
+        self.lbl_hits_min.pack(side="right", padx=(0, 16))      # v14：面板收起时「筛出 N 题」挂这儿（v15：与消息之间留 16px）
         # v5 那条常驻快捷键提示（「按 ? 看快捷键」…）早已删；v9 把计数行并进这一行、
         # 消息挪到最右端（原底部行删除），并删掉状态筛选（下拉框 + F 键）。
 
-    # ------------------------------------------------------------ 筛选区（v13）
-    def _make_filter_bar(self):
-        """v13：窗口第二行 = 筛选区（知识点框 + 难度框 + 6 个状态按钮 + 清空 + 筛出计数）。
+    # ------------------------------------------------------------ 筛选下拉（v14）
+    def _make_dropdown(self):
+        """v14：搜索框下面的**下拉面板**（原 v13 第二行筛选区整行并进来）。
 
-            匹配逻辑一律走 `status_report.filter_rows`（见 `filter_state()`）——命令行
-        `status_report.py --knowledge/--status/--todo/--difficulty` 与这里同条件必同一结果，
-        本文件不另写一套规则。只作用于总表（跟搜索一个口径，不影响看板）。
-        三个条件各自是「并集」逻辑：知识点逗号分隔多个词 / 状态多选 / 难度多值，都是任一命中。
+        行序 = 知识点 / 难度 / 状态（面板上面那行「搜索」就是窗口第一行的搜索框）；
+        搜索框里按 ↓ 展开、↑ 收起；展开时面板占位、表格整体下移（收起即恢复）。
+        匹配逻辑一个字没换：`filter_state()` → `status_report.filter_rows`，
+        命令行 status_report.py 与 GUI 同条件必同一结果（冒烟 (zz) 拿子进程比过）。
+        「筛出 N 题」在面板底部；面板收起时同一行字挂到窗口第一行右端（var_hits_min）。
 
-        焦点：两个输入框 + 状态组要进 Tab 轮换（`_focus_ring`），但**不用 takefocus** ——
-        窗口里 Tab 一律由 root 那个处理显式轮换并 `return "break"`，其余控件 takefocus 全关
-        （跟 v9 的两站口径同一个做法）。
+        焦点：两个输入框 + 状态列表都进「搜索」这一站（Tab 环只有主页面 ⇄ 搜索两站，
+        `_rotate_focus` 里把面板各行都算「搜索」）；面板内部用 ↑↓ 逐行走、Esc 逐层退回
+        （见 `_dropdown_open` / `_esc_search` 那一族）。控件一律 takefocus=0 ——
+        窗口里 Tab 只由 root 那处处理。
         """
-        bar = tk.Frame(self.root, bg=C_BG)
-        bar.pack(fill="x", padx=16, pady=(0, 2))
-        self.filter_bar = bar
+        dlg = tk.Frame(self.root, bg=C_BG)
+        self.dlg = dlg
+        self.dlg_open = False
+        self.status_cursor = 0                      # 状态列表里的光标行（0 起；勾选态不用 Listbox 自带 selection）
         f13 = (self.fam, 13)
 
-        tk.Label(bar, text="筛选", bg=C_BG, fg=C_TEXT, font=f13).pack(side="left")
-        tk.Label(bar, text="知识点", bg=C_BG, fg=C_MUTED, font=f13).pack(side="left", padx=(10, 4))
+        row = tk.Frame(dlg, bg=C_BG)
+        row.pack(fill="x", pady=(2, 0))
+        tk.Label(row, text="知识点", bg=C_BG, fg=C_TEXT, font=f13).pack(side="left", padx=(0, 6))
         self.var_know = tk.StringVar(value="")
-        self.ent_know = ttk.Entry(bar, textvariable=self.var_know, width=10, font=f13,
+        self.ent_know = ttk.Entry(row, textvariable=self.var_know, width=16, font=f13,
                                   style="Nav.TEntry", takefocus=0)
         self.ent_know.pack(side="left")
-        tk.Label(bar, text="难度", bg=C_BG, fg=C_MUTED, font=f13).pack(side="left", padx=(10, 4))
+        self._add_placeholder(self.ent_know, "如 DP、二分")      # v15：空框灰字提示
+
+        row = tk.Frame(dlg, bg=C_BG)
+        row.pack(fill="x", pady=(2, 0))
+        tk.Label(row, text="难" + LABEL_PAD + "度", bg=C_BG, fg=C_TEXT, font=f13).pack(side="left", padx=(0, 6))   # v15：插全角空格 = 与「知识点」同宽
         self.var_diff = tk.StringVar(value="")
-        self.ent_diff = ttk.Entry(bar, textvariable=self.var_diff, width=10, font=f13,
+        self.ent_diff = ttk.Entry(row, textvariable=self.var_diff, width=16, font=f13,
                                   style="Nav.TEntry", takefocus=0)
         self.ent_diff.pack(side="left")
+        self._add_placeholder(self.ent_diff, "如 1700-1900")     # v15：空框灰字提示
+
+        row = tk.Frame(dlg, bg=C_BG)
+        row.pack(fill="x", pady=(2, 0))
+        tk.Label(row, text="状" + LABEL_PAD + "态", bg=C_BG, fg=C_TEXT, font=f13).pack(side="left", padx=(0, 6), anchor="n")   # v15：插全角空格 = 与「知识点」同宽；padx 与另两行统一（左缘对齐见冒烟 (hh2)）
+        self.status_on = set()                      # 勾选中的状态（空 = 不按状态筛）
+        self.lb_status = tk.Listbox(row, height=len(STATES), width=13, font=f13,
+                                    activestyle="none", selectmode="multiple", exportselection=False,
+                                    takefocus=0, highlightthickness=1,
+                                    highlightbackground=C_LINE, highlightcolor=C_ACCENT,
+                                    bd=0, bg=C_PANEL, fg=C_TEXT)
+        self.lb_status.pack(side="left")            # v15：去掉 (6,0) 的左侧 padding —— 与两个输入框同一条左缘（对齐账见冒烟 (hh2)）
+        for i, st in enumerate(STATES):
+            self.lb_status.insert("end", "%d. %s" % (i + 1, st))   # 序号跟状态浮层一致（`1. 未做` …）
+        lb = self.lb_status
+        lb.bind("<Up>", lambda e: self._status_move(-1))
+        lb.bind("<Down>", lambda e: self._status_move(1))
+        lb.bind("<space>", lambda e: self._status_toggle_cur())
+        lb.bind("<Return>", lambda e: self._status_toggle_cur())
+        lb.bind("<KP_Enter>", lambda e: self._status_toggle_cur())
+        for k in range(len(STATES)):
+            lb.bind("<Key-%d>" % (k + 1), lambda e, i=k: self._toggle_status_index(i))
+            lb.bind("<KP_%d>" % (k + 1), lambda e, i=k: self._toggle_status_index(i))
+        lb.bind("<Escape>", self._esc_from_status)
+        lb.bind("<Button-1>", self._status_click)
+        lb.bind("<FocusIn>", lambda e: self._paint_chips())
+        lb.bind("<FocusOut>", lambda e: self._paint_chips())
+
+        row = tk.Frame(dlg, bg=C_BG)
+        row.pack(fill="x", pady=(6, 4))                          # v15：面板底排留白调匀
+        # v15 末（用户点名「去掉清空选项」）：底排的「清空」按钮删除 —— 这行只留「筛出 N 题」。
+        # 要清条件走 Esc 逐层退回（框里有字先清这一格）；`_clear_filters` 保留给测试夹具调用。
+        self.var_hits = tk.StringVar(value="")
+        self.lbl_hits = tk.Label(row, textvariable=self.var_hits, bg=C_BG, fg=C_ACCENT_DARK,
+                                 font=(self.fam, 11), anchor="e")
+        self.lbl_hits.pack(side="right")            # 只在筛选开着时才有字
+
+        # 面板里按行上下走（↑↓）；Enter 跟搜索框同风格 = 带条件跳回总表；Esc 逐层退回
         for ent, var in ((self.ent_know, self.var_know), (self.ent_diff, self.var_diff)):
             ent.bind("<KeyRelease>", lambda e: self.refresh_view())
-            ent.bind("<Return>", self._jump_to_table)           # 跟搜索框同风格：带条件跳回总表
-            ent.bind("<Down>", self._jump_to_table)
-            ent.bind("<Escape>", lambda e, v=var: self._esc_filter_entry(v))
+            ent.bind("<Return>", self._jump_to_table)
+            ent.bind("<KP_Enter>", self._jump_to_table)
+            ent.bind("<Escape>", lambda e, v=var: self._esc_row(v))
+        self.ent_know.bind("<Up>", lambda e: self._focus_to(self.ent_search))
+        self.ent_know.bind("<Down>", lambda e: self._focus_to(self.ent_diff))
+        self.ent_diff.bind("<Up>", lambda e: self._focus_to(self.ent_know))
+        self.ent_diff.bind("<Down>", lambda e: self._focus_to(self.lb_status))
+        self._paint_chips()
 
-        tk.Label(bar, text="状态", bg=C_BG, fg=C_MUTED, font=f13).pack(side="left", padx=(10, 4))
-        self.status_on = set()                                  # 选中的状态（空 = 不按状态筛）
-        self.chip_btns = []
-        for st in STATES:
-            b = tk.Button(bar, text=st, font=(self.fam, 11), bd=0, relief="flat",
-                          padx=8, cursor="hand2", takefocus=0,
-                          highlightthickness=1, highlightbackground=C_LINE, highlightcolor=C_ACCENT,
-                          bg=C_PANEL, fg=C_TEXT, activebackground=C_ACCENT_LIGHT,
-                          activeforeground=C_TEXT,
-                          command=lambda s=st: self._toggle_status(s))
-            b.pack(side="left", padx=(4, 0))
-            b.bind("<space>", lambda e, s=st: self._toggle_status(s))   # return "break"：别让按钮类绑定再触发一次
-            b.bind("<Return>", lambda e, s=st: self._toggle_status(s))
-            b.bind("<KP_Enter>", lambda e, s=st: self._toggle_status(s))
-            b.bind("<Left>", lambda e: self._chip_move(-1))
-            b.bind("<Right>", lambda e: self._chip_move(1))
-            b.bind("<Escape>", self._esc_filter_to_table)
-            self.chip_btns.append(b)
+    # ------------------------------------------------------------ 占位提示（v15）
+    def _add_placeholder(self, ent, text):
+        """空框且没焦点时浮一句浅灰提示语；聚焦 / 有字就隐。
 
-        self.btn_clear = tk.Button(bar, text="清空", font=(self.fam, 11), bd=0, relief="flat",
-                                   padx=8, cursor="hand2", takefocus=0,
-                                   highlightthickness=1, highlightbackground=C_LINE,
-                                   bg=C_BG, fg=C_MUTED, activebackground=C_ACCENT_LIGHT,
-                                   command=self._clear_filters)
-        self.btn_clear.pack(side="left", padx=(12, 0))
+        提示是**浮在输入框上的 Label**（`place` 在框内），不写进 textvariable ——
+        `ent.get()` 仍是空串，匹配逻辑 / 命令行看不到它，不参与搜索。
+        x=8 是给 Nav.TEntry 的 padding(7,5) + 1px 边框留的位置。
+        """
+        lbl = tk.Label(ent, text=text, bg=C_PANEL, fg=C_PLACEHOLDER,
+                       font=(self.fam, 13), takefocus=0)
 
-        self.var_hits = tk.StringVar(value="")
-        self.lbl_hits = tk.Label(bar, textvariable=self.var_hits, bg=C_BG, fg=C_ACCENT_DARK,
-                                 font=(self.fam, 11), anchor="e")
-        self.lbl_hits.pack(side="right")                        # 只在筛选开着时才有字
+        def click(_e):
+            ent.focus_set()                  # 点提示 = 点框（提示别把鼠标吃掉）
+            return "break"
+
+        def sync(_e=None):
+            if ent.get() or ent.focus_get() is ent:
+                lbl.place_forget()
+            else:
+                lbl.place(x=8, rely=0.5, anchor="w")
+
+        lbl.bind("<Button-1>", click)
+        ent.bind("<FocusIn>", sync, add="+")
+        ent.bind("<FocusOut>", sync, add="+")
+        ent.bind("<KeyRelease>", sync, add="+")     # 打字 / 删空都走这条
+        self._ph_syncs.append(sync)
+        sync()
+
+    def _dropdown_open(self, event=None):
+        """搜索框里按 ↓：展开面板（第一下只展开、焦点留在搜索框，还能接着打字）；
+        已经展开时再按 ↓ = 进「知识点」行。"""
+        if not self.dlg_open:
+            self.dlg.pack(fill="x", padx=16, pady=(0, 2), before=self.nb)
+            self.dlg_open = True
+            self._paint_chips()
+            self._refresh_hits_labels()
+            return "break"
+        self.ent_know.focus_set()
+        return "break"
+
+    def _dropdown_hide(self, event=None):
+        """收起面板（搜索框 ↑ / Esc 到底 / 离开搜索站都走这条）；筛选条件一个字不动。"""
+        if self.dlg_open:
+            self.dlg.pack_forget()
+            self.dlg_open = False
+            self._refresh_hits_labels()
+        return "break"
+
+    def _focus_to(self, w):
+        """面板里 ↑↓ 逐行走：把焦点挪到相邻那一行。"""
+        w.focus_set()
+        return "break"
 
     def filter_state(self):
-        """筛选区当前状态 → (kwargs, raw_diff, bad)。
+        """筛选（v14：搜索框下的下拉面板）当前状态 → (kwargs, raw_diff, bad)。
 
         kwargs 直接喂 `status_report.filter_rows`（两端唯一实现）；raw_diff = 难度框拆出的
         原文词表（原样显示用）；bad = 认不出的难度写法（这些一条都不匹配，要跟命令行的
@@ -1246,64 +1359,109 @@ class StatusGui(object):
         return bool(kw["knowledge"] or kw["statuses"] or kw["difficulty"])
 
     def _toggle_status(self, st):
-        """状态小按钮：点一下选中 / 再点取消。回 "break" —— 空格键别让按钮类绑定再触发一次。"""
+        """勾选 / 取消一个状态（列表里点 / 空格 / Enter / 1~6 都走这条）。回 "break"：
+        空格键别让 Listbox 类绑定再触发一次。"""
         self.status_on.symmetric_difference_update({st})
         self._paint_chips()
         self.refresh_view()
         return "break"
 
+    def _toggle_status_index(self, i):
+        """状态列表里按 1~6：勾选 / 取消第 i+1 项（越界忽略）；光标跟到那行。"""
+        if not (0 <= i < len(STATES)):
+            return "break"
+        self.status_cursor = i
+        return self._toggle_status(STATES[i])
+
+    def _status_toggle_cur(self):
+        """状态列表里空格 / Enter：勾选 / 取消光标那一行。"""
+        return self._toggle_status(STATES[self.status_cursor])
+
+    def _status_move(self, delta):
+        """状态列表里 ↑↓：移动光标行（不改勾选）；到顶再 ↑ = 退回上一行（难度框）。"""
+        i = self.status_cursor + delta
+        if i < 0:
+            self.ent_diff.focus_set()
+            return "break"
+        self.status_cursor = min(i, len(STATES) - 1)
+        self._paint_chips()
+        self.lb_status.see(self.status_cursor)
+        return "break"
+
+    def _status_click(self, event):
+        """鼠标点状态列表：点哪行就把光标 + 勾选落到那行（选中态全走 itemconfig，不用 selection）。"""
+        lb = self.lb_status
+        i = lb.nearest(event.y)
+        if 0 <= i < len(STATES):
+            self.status_cursor = i
+            lb.focus_set()
+            self._toggle_status(STATES[i])
+        return "break"
+
     def _paint_chips(self):
-        """按选中态重画 6 个状态按钮（选中 = 强调色底白字）。"""
-        for b, st in zip(self.chip_btns, STATES):
+        """重画状态列表：勾选 = 强调色底白字；光标行（焦点在列表里时）再加一档底色。"""
+        lb = self.lb_status
+        focused = self._focus_widget() is lb
+        lb.selection_clear(0, "end")                # 勾选态不用 Listbox 自带 selection，全部走 itemconfig
+        for i, st in enumerate(STATES):
             on = st in self.status_on
-            b.configure(bg=C_ACCENT if on else C_PANEL,
-                        fg="#ffffff" if on else C_TEXT,
-                        activebackground=C_ACCENT_DARK if on else C_ACCENT_LIGHT)
+            cur = focused and i == self.status_cursor
+            if on:
+                bg, fg = (C_ACCENT_DARK if cur else C_ACCENT), "#ffffff"
+            else:
+                bg, fg = (C_ACCENT_LIGHT if cur else C_PANEL), (C_ACCENT_DARK if cur else C_TEXT)
+            lb.itemconfig(i, background=bg, foreground=fg)
 
     def _clear_filters(self):
-        """清空筛选区（两个框 + 全部状态按钮）——回到「不筛」，总表恢复全量。"""
+        """清空筛选（两个框 + 全部勾选）——回到「不筛」，总表恢复全量。
+
+        v15 末：面板底部的「清空」按钮已删（用户点名），这里保留给测试夹具与程序化调用。"""
         self.var_know.set("")
         self.var_diff.set("")
         self.status_on.clear()
         self._paint_chips()
+        for sync in self._ph_syncs:      # v15：程序改空 var 不触发 KeyRelease，手动同步占位提示
+            sync()
         self.refresh_view()
         return "break"
 
-    def _chip_move(self, delta):
-        """状态按钮上按 ← / →：在 6 个按钮里走（组内导航；整组在 Tab 环里算一站）。"""
-        cur = self._focus_widget()
-        if cur not in self.chip_btns:
+    def _esc_row(self, var, event=None):
+        """知识点 / 难度框里 Esc：这一格有字先清掉（人留在本行）；已经空了 → 上退一行。"""
+        if var.get():
+            var.set("")
+            for sync in self._ph_syncs:      # v15：程序改空 var 不触发 KeyRelease，手动同步占位提示
+                sync()
+            self.refresh_view()
             return "break"
-        i = self.chip_btns.index(cur)
-        self.chip_btns[(i + delta) % len(self.chip_btns)].focus_set()
+        (self.ent_search if var is self.var_know else self.ent_know).focus_set()
         return "break"
 
-    def _esc_filter_to_table(self, event=None):
-        """筛选区里按 Esc = 回表格（输入框那条会先清掉自己那一格，见 _esc_filter_entry）。"""
-        self._active_tree().focus_set()
+    def _esc_from_status(self, event=None):
+        """状态列表里 Esc：退回上一层（难度框）——勾选不动。"""
+        self.ent_diff.focus_set()
         return "break"
 
-    def _esc_filter_entry(self, var, event=None):
-        """筛选输入框里按 Esc：清掉这一格 + 回表格（跟搜索框那条同风格）。"""
-        var.set("")
-        self.refresh_view()
-        self._active_tree().focus_set()
-        return "break"
+    def _refresh_hits_labels(self):
+        """「筛出 N 题」两处挂点：面板底部一处；面板收起时同一行字挂到窗口第一行右端。"""
+        self.var_hits_min.set("" if self.dlg_open else self.var_hits.get())
 
     def update_hits(self, n):
-        """筛选区右端的 `筛出 N 题`：只在筛选开着时有字（N = 当前总表可见行数）。
+        """`筛出 N 题`：只在筛选开着时有字（N = 当前总表可见行数 = 筛选 ∧ 搜索的交集）。
 
-        这行字属于筛选区，清空就消失 —— v10 删掉的常驻「搜出 M 题」不复活。
+        面板展开时在面板底部；收起时挂到窗口第一行右端（v14）—— 筛选开着却没有任何
+        提示的窗口状态不许出现。清空就消失（v10 删掉的常驻「搜出 M 题」不复活）。
         写法认不出的难度在这里点名（跟命令行的 `★` 同一口径）。
         """
         if not self._filter_on():
             self.var_hits.set("")
+            self.var_hits_min.set("")
             return
         s = "筛出 %d 题" % n
         _kw, _raw, bad = self.filter_state()
         if bad:
             s += "（难度写法不认：%s）" % "、".join(bad)
         self.var_hits.set(s)
+        self._refresh_hits_labels()
 
     # ------------------------------------------------------------ 总表页
     def _make_all_tab(self):
@@ -1457,7 +1615,7 @@ class StatusGui(object):
         self.var_msg.set("")
 
     def visible_rows(self):
-        """总表当前该显示的行 = **筛选区（v13）∧ 搜索（v10 规则）**。
+        """总表当前该显示的行 = **筛选（v13 起；v14 移进搜索框下的下拉面板）∧ 搜索（v10 规则）**。
 
         筛选走 `status_report.filter_rows` —— 命令行 `--knowledge / --status / --todo /
         --difficulty` 与 GUI 共用同一份实现（两端同条件必然同一份结果，冒烟 (zz) 真跑 CLI 比过）。
@@ -1507,7 +1665,7 @@ class StatusGui(object):
         for h in HEADER:
             tree.heading(h, text=self._head_text(h))
         self.update_count()
-        self.update_hits(len(rows))         # v13：筛选区右端的「筛出 N 题」
+        self.update_hits(len(rows))         # v13：筛选的「筛出 N 题」（v14：面板底部 / 收起时第一行右端）
         if keep_index is not None:
             self._select_index(tree, keep_index)
         elif keep:
@@ -1673,14 +1831,14 @@ class StatusGui(object):
         进段时 show_segment 会把强调色 / 清单 / 选中行（v10：本段上次那行，没记过就是第 1 行）/
         焦点一并弄好；进「今天要做的」不记上次在哪段（往前第 1 段、往后第 4 段）。
 
-        防冲突（v5 的规则原样保留；v13 起让位对象 = 三个输入框…）：
-          * 焦点在搜索框 / 筛选区两个输入框里时**不抢** —— return None（不 break），那儿的
+        防冲突（v5 的规则原样保留；v14 起让位对象 = 三个输入框 + 状态列表…）：
+          * 焦点在搜索框 / 知识点框 / 难度框里时**不抢** —— return None（不 break），那儿的
             ← / → 归 Entry 自己挪光标；
-          * 焦点在筛选区状态按钮上时也不抢（那条横排由按钮自己处理：组内 ← / → 换按钮）；
+          * 焦点在面板的状态列表上时也不抢（列表里 ↑↓ 走、空格 / Enter / 1~6 勾选）；
           * 状态浮层 / `?` 一览打开时不响应（_busy）；
           * 表格 / 清单里 ← / → 没有别的用途，直接绑。
         """
-        if self._busy() or self._in_text_widget() or self._focus_widget() in self.chip_btns:
+        if self._busy() or self._in_text_widget() or self._focus_widget() is self.lb_status:
             return None
         self._remember_today_sel()          # v10：切走前先把本段当前选中行记下来
         if self.nb.index(self.nb.select()) == 0:
@@ -1702,18 +1860,19 @@ class StatusGui(object):
         return "break"
 
     def _focus_ring(self):
-        """v13：Tab 轮换的一圈（5 站）= 当前页表格 / 搜索框 / 知识点框 / 难度框 / 状态组。
+        """v14：Tab 轮换的一圈（2 站）= 当前页表格 / 搜索框。
 
-        「主页面」= 当前页的表格 / 清单（总表页→总表树、看板页→看板清单）；状态组（6 个
-        按钮）**整组算一站**（组内用 ← / → 走）。v9 的两站口径作废。
+        「主页面」= 当前页的表格 / 清单（总表页→总表树、看板页→看板清单）；下拉面板里的
+        各行（知识点 / 难度 / 状态列表）**都算「搜索」这一站**（面板内部用 ↑↓ 走）。
+        v13 的五站口径作废。
         """
-        return [self._active_tree(), self.ent_search, self.ent_know, self.ent_diff,
-                self.chip_btns[0]]
+        return [self._active_tree(), self.ent_search]
 
     def _rotate_focus(self, delta, event=None):
-        """Tab / Shift+Tab：在 `_focus_ring()` 那一圈上正 / 反向轮换（v6 三站 → v9 两站 → v13 五站）。
+        """Tab / Shift+Tab：在 `_focus_ring()` 那一圈上正 / 反向轮换（v6 三站 → v9 两站 → v13 五站 → v14 又并回两站）。
 
-        焦点在状态组里任何一个按钮上时按整组算；跑去别处（理论上不该有）时贴回第一站。
+        焦点在面板任意一行上都按「搜索」站算；在主页面 ⇄ 搜索之间走时**自动收起 / 保持面板**
+        （离开搜索站收面板、条件不动）。跑去别处（理论上不该有）时贴回第一站。
         浮层 / 一览开着时不响应。Tab 的默认遍历不会跑：这个 root 级处理 return "break"
         （v2~v4 的 Tab 切页就是靠它压住的）；窗口里 Tab 只有这一处。
         """
@@ -1721,14 +1880,17 @@ class StatusGui(object):
             return None
         ring = self._focus_ring()
         cur = self._focus_widget()
-        if cur in self.chip_btns:
-            i = ring.index(self.chip_btns[0])
+        if cur is self.ent_search or (self.dlg_open and cur in (self.ent_know, self.ent_diff, self.lb_status)):
+            i = ring.index(self.ent_search)          # 面板里各行都算「搜索」站
         elif cur in ring:
             i = ring.index(cur)
         else:
             ring[0].focus_set()
             return "break"
-        ring[(i + delta) % len(ring)].focus_set()
+        nxt = ring[(i + delta) % len(ring)]
+        if nxt is self._active_tree():
+            self._dropdown_hide()                    # 离开搜索站：收面板，条件不动
+        nxt.focus_set()
         return "break"
 
     def _open_material(self, event=None):
@@ -1830,7 +1992,7 @@ class StatusGui(object):
             return None
 
     def _in_text_widget(self):
-        """焦点是不是在「要收普通字符」的控件里（v13：搜索框 + 筛选区两个输入框）——那时快捷键让位。"""
+        """焦点是不是在「要收普通字符」的控件里（v14：搜索框 + 下拉面板的两个输入框）——那时快捷键让位。"""
         return self._focus_widget() in (self.ent_search, self.ent_know, self.ent_diff)
 
     def _busy(self):
@@ -1847,18 +2009,27 @@ class StatusGui(object):
         return self.focus_search()
 
     def _esc_search(self, event=None):
-        """搜索框里按一次 Esc：先清空、再回表格（两件事一次做完）。"""
-        self.var_search.set("")
-        self.refresh_view()
+        """搜索框里 Esc（v14 起逐层退回，不再一把清空 + 回表格）：
+
+        有字 → 先清空（留在搜索框）；空 → 面板开着就先收起；面板也收着 → 回主页面表格。
+        """
+        if self.var_search.get():
+            self.var_search.set("")
+            self.refresh_view()
+            return "break"
+        if self.dlg_open:
+            return self._dropdown_hide()
         self._active_tree().focus_set()
         return "break"
 
     def _jump_to_table(self, event=None):
-        """v5：搜索框里 Enter / ↓ —— 带着搜索词跳回总表看结果。
+        """v5：搜索框 / 面板里 Enter —— 带着搜索词跳回总表看结果（v14 起 ↓ 改作展开下拉）。
 
-        搜索词一律保留；选中行按「跟题」规矩：当前那道题还在结果里就保它，
-        被搜掉 / 搜不到就贴回第一行，并滚到可见。焦点在别的页（看板页）上时先切回总表页。
+        搜索词与筛选条件一律保留；离开搜索站自动收起面板（条件不动）。选中行按「跟题」
+        规矩：当前那道题还在结果里就保它，被搜掉 / 搜不到就贴回第一行，并滚到可见。
+        焦点在别的页（看板页）上时先切回总表页。
         """
+        self._dropdown_hide()
         keep = self.selected_key()
         if self.nb.index(self.nb.select()) != 0:
             self.nb.select(0)
@@ -2796,13 +2967,14 @@ def smoke():
           "（算出来 = %r）" % (seg_n,))
     assert [gui.card_num[i].cget("text") for i in range(4)] == [str(n) for n in seg_n]
 
-    # --- v9 闸门 (hh)：顶部第一行 = 搜索标签 + 搜索框（宽 13）+ 统计 + 消息（这一行最右端）
+    # --- v9 闸门 (hh)：顶部第一行 = 搜索标签 + 搜索框（v15 起宽 26）+ 统计 + 消息（这一行最右端）
     head = gui.ent_search.master
     assert gui.lbl_search.master is head and gui.lbl_count.master is head \
-        and gui.lbl_msg.master is head, "搜索 / 统计 / 消息该在同一个父容器（第一行）里"
-    assert gui.lbl_search.cget("text") == "搜索", gui.lbl_search.cget("text")
-    assert int(gui.ent_search.cget("width")) == 13, \
-        "搜索框宽度应减半为 13：%r" % gui.ent_search.cget("width")
+        and gui.lbl_msg.master is head and gui.lbl_hits_min.master is head, \
+        "搜索 / 统计 / 消息 / 筛出计数（v14）该在同一个父容器（第一行）里"
+    assert gui.lbl_search.cget("text") == "搜" + LABEL_PAD + "索", gui.lbl_search.cget("text")
+    assert int(gui.ent_search.cget("width")) == 26, \
+        "搜索框宽度该是 26（v15 从 13 翻倍）：%r" % gui.ent_search.cget("width")
     assert str(gui.lbl_msg.pack_info()["side"]) == "right", gui.lbl_msg.pack_info()
     heads = [str(w.cget("text")) for w in _walk(root) if w.winfo_class() == "Label"]
     assert "题目状态跟踪表" not in heads, "页头大标题还留在窗口里"
@@ -2811,8 +2983,40 @@ def smoke():
     print("(hh) 第一行 = 搜索标签 + 搜索框（宽 %s）+ 统计 + 消息（side=right，同一父容器）；"
           "无大标题 / 无路径行 ✓；(ll) 启动消息为空（无「已读入 …」）✓" % gui.ent_search.cget("width"))
 
-    # --- v9 闸门 (ii)：那个「状态筛选**下拉框**」整块没了 —— 窗口里没有下拉框、没有
-    #     var_filter / cmb_filter、F 不绑东西（v13 的筛选区是输入框 + 按钮，不是把它搬回来）
+    # --- v15 闸门 (hh2)：四个标签同宽 + 三行控件左缘一条线 + 框内留白 + 灰字占位提示
+    gui._dropdown_open()                     # 先展开面板 —— 面板里的控件映射了才有真几何
+    root.update()
+    labels4 = (gui.lbl_search, gui.ent_know.master.winfo_children()[0],
+               gui.ent_diff.master.winfo_children()[0], gui.lb_status.master.winfo_children()[0])
+    widths = [w.winfo_reqwidth() for w in labels4]
+    assert len(set(widths)) == 1, "四个标签该一样宽（三字宽）：%r" % (widths,)
+    xs = [w.winfo_rootx() for w in (gui.ent_search, gui.ent_know, gui.ent_diff, gui.lb_status)]
+    assert len(set(xs)) == 1, "搜索框与面板三行控件的左缘该排成一条线：%r（标签 rootx=%r）" % (
+        xs, [w.winfo_rootx() for w in labels4])
+    pad = ttk.Style(root).lookup("Nav.TEntry", "padding")
+    assert str(pad) in ("(7, 5)", "7 5", ("7", "5")), "Nav.TEntry 该有统一内边距 (7,5)：%r" % (pad,)
+    phs = [w for w in _walk(root) if w.winfo_class() == "Label"
+           and str(w.cget("fg")) == C_PLACEHOLDER]
+    assert len(phs) == 3, "三个输入框该各有一个灰字占位提示：%r" % ([w.cget("text") for w in phs],)
+    assert gui.var_search.get() == "" and not gui.ent_search.get(), "占位提示不许写进搜索框的值"
+    assert gui.ent_search.winfo_children() and any(
+        w.place_info() for w in gui.ent_search.winfo_children()), "搜索框空着时该显示占位提示"
+    gui.ent_search.focus_set()
+    root.update()
+    assert not any(w.place_info() for w in gui.ent_search.winfo_children()), \
+        "聚焦后占位提示该隐掉"
+    gui.tree.focus_set()
+    root.update()
+    assert any(w.place_info() for w in gui.ent_search.winfo_children()), \
+        "失焦且空着时占位提示该回来"
+    assert not hasattr(gui, "btn_clear"), "v15 末：「清空」按钮该已删除（用户点名「去掉清空选项」）"
+    gui._dropdown_hide()                     # 收起面板，后面的闸门按「默认收起」继续
+    root.update()
+    print("(hh2) v15 观感：四标签同宽（%dpx）、搜索框 26、三行控件左缘一条线、Nav.TEntry padding=%s、"
+          "三个灰字占位提示（聚焦隐 / 失焦回、不写进 var）、面板「清空」按钮已删 ✓" % (widths[0], pad))
+
+    # --- v9 闸门 (ii)：那个「状态筛选**下拉框**」整块没了 —— 窗口里没有下拉框控件、没有
+    #     var_filter / cmb_filter、F 不绑东西（v14 的下拉面板 = Entry + Listbox，不是把它搬回来）
 
     combos = [w for w in [root] + list(_walk(root)) if w.winfo_class() == "TCombobox"]
     assert combos == [], "窗口里还有下拉框：%r" % (combos,)
@@ -2825,7 +3029,7 @@ def smoke():
     root.update()
     assert root.focus_get() is gui.tree, "按 F 不该有任何反应（焦点被抢到 %r）" % root.focus_get()
     print("(ii) 下拉框式筛选没了：窗口里 0 个 TCombobox；var_filter / cmb_filter 不存在；"
-          "F 未绑定（按下去什么也不发生）✓（v13 的筛选区走输入框 + 按钮，见 (zz)）")
+          "F 未绑定（按下去什么也不发生）✓（v14 的筛选 = 搜索框下的下拉面板：Entry + Listbox，见 (zz)）")
 
     # --- v3 闸门 (a)：排序键只留 场次 / 难度 / 日期（知识点不可排）
     assert list(SORTABLE) == ["场次", "难度", "日期"], SORTABLE
@@ -2958,11 +3162,11 @@ def smoke():
     print("(aa) 界面上没有提示括号：扫了 %d 段文案（Label / 计数行 / 消息行 / 两棵树的单元格），"
           "%d 个禁用子串 %s 一个都没命中 ✓" % (len(seen_txt), len(BANNED), "/".join(BANNED)))
 
-    # --- v7 闸门 (bb)：看板第 2 段卡片标题 / 搜索标签的文案定死
+    # --- v7 闸门 (bb)：看板第 2 段卡片标题 / 搜索标签的文案定死（v15：标签插了全角空格）
     cap2 = gui.card_cap[1].cget("text")
     sea = gui.lbl_search.cget("text")
     assert cap2 == "2. 待补题", cap2
-    assert sea == "搜索", sea
+    assert sea == "搜" + LABEL_PAD + "索", sea
     print("(bb) 看板第 2 段卡片标题 = %r；搜索标签 = %r ✓" % (cap2, sea))
 
     # --- v7 闸门 (cc) 已随「状态筛选」整块删除（下拉框没了，样式断言无处可测）——
@@ -3057,11 +3261,14 @@ def smoke():
     root.update()
     assert root.focus_get() is gui.ent_search, "搜索框里打 F 不该被抢走"
     gui.var_search.set("双指针")
-    gui.ent_search.event_generate("<Escape>")                   # 一次 Esc：清空 + 回表格
+    gui.ent_search.event_generate("<Escape>")                   # v14 起逐层退回：有字先清空（人留在框里）
     root.update()
     assert gui.var_search.get() == "", gui.var_search.get()
+    assert root.focus_get() is gui.ent_search, root.focus_get()
+    gui.ent_search.event_generate("<Escape>")                   # 再按一次（空框、面板收着）才回表格
+    root.update()
     assert root.focus_get() is gui.tree, root.focus_get()
-    print("(d) 搜索框按一次 Esc：已清空且焦点回表格 ✓")
+    print("(d) 搜索框 Esc 逐层退回（v14）：有字先清空、再按一次才回表格 ✓")
     n_focus_before = root.focus_get()
     gui.tree.event_generate("<KeyPress>", keysym="f")           # v9：F 不再跳任何地方
     root.update()
@@ -3194,55 +3401,54 @@ def smoke():
     print("(r) 浮层里按 %d → 直接写入第 %d 个状态「%s」（浮层数字直选没被误删）✓"
           % (key3, key3, want3))
 
-    # --- v9 闸门 (jj)：Tab / Shift+Tab 焦点轮换（v13：两站 → 五站，见下）
+    # --- v9 闸门 (jj)：Tab / Shift+Tab 焦点轮换（v14：两站 —— 主页面 ⇄ 搜索；
+    #     下拉面板里的行（知识点 / 难度 / 状态）都按「搜索」这一站算）
     assert root.bind("<Tab>") != "" and root.bind("<Shift-Tab>") != "", \
         "root 上要挂 Tab / Shift-Tab 焦点轮换"
     gui.nb.select(0)
     gui.tree.focus_force()                   # 合成按键 / 反复查 focus_get 前先 focus_force：
     root.update()                            # 窗口没拿到 OS 焦点时 focus_get() 会给 None（v10 踩过）
-    ring = [gui.ent_search, gui.ent_know, gui.ent_diff, gui.chip_btns[0], gui.tree]
+    gui._dropdown_hide()
+    root.update()
+    ring = [gui.ent_search, gui.tree]
     seq = []
-    for _ in range(2 * len(ring)):            # 绕两圈：每圈 5 站
+    for _ in range(2 * len(ring)):            # 绕两圈：每圈 2 站
         w = root.focus_get()
         assert w is not None, "轮换过程中焦点不能丢"
         w.event_generate("<KeyPress>", keysym="Tab")
         root.update()
         seq.append(root.focus_get())
-    want = ring * 2
-    assert seq == want, "Tab 轮换序列不对：%r" % ([str(x) for x in seq],)
-    # 状态组里任何一个小按钮上都算「状态」这一站（组内用 ← / → 走）
-    gui.chip_btns[3].focus_force()
-    root.update()
-    gui.chip_btns[3].event_generate("<KeyPress>", keysym="Tab")
-    root.update()
-    assert root.focus_get() is gui.tree, "从状态组（第 4 个按钮）按 Tab 该跳到主页面"
-    gui.chip_btns[3].focus_force()
-    root.update()
-    gui.chip_btns[3].event_generate("<KeyPress>", keysym="Tab", state=0x1)
-    root.update()
-    assert root.focus_get() is gui.ent_diff, "从状态组按 Shift+Tab 该跳到难度框"
+    assert seq == ring * 2, "Tab 轮换序列不对：%r" % ([str(x) for x in seq],)
     gui.tree.focus_force()
     root.update()
     seq2 = []
-    for _ in range(len(ring)):                # Shift+Tab 反向绕一圈
-        w = root.focus_get()
-        w.event_generate("<KeyPress>", keysym="Tab", state=0x1)
+    for _ in range(len(ring)):                # Shift+Tab 反向：树 → 搜索框 → 树
+        root.focus_get().event_generate("<KeyPress>", keysym="Tab", state=0x1)
         root.update()
         seq2.append(root.focus_get())
-    assert seq2 == [gui.chip_btns[0], gui.ent_diff, gui.ent_know, gui.ent_search, gui.tree], \
-        "Shift+Tab 反向轮换不对：%r" % ([str(x) for x in seq2],)
-    # 状态组组内导航：← / → 在 6 个按钮上绕；Esc 回表格
-    gui.chip_btns[0].focus_force()
+    assert seq2 == [gui.ent_search, gui.tree], "Shift+Tab 反向轮换不对：%r" % ([str(x) for x in seq2],)
+    # 面板里任意一行都算「搜索」站：从面板按 Tab（或 Shift+Tab）都回主页面，并自动收面板
+    gui.ent_search.focus_force()
     root.update()
-    gui.chip_btns[0].event_generate("<KeyPress>", keysym="Left")
+    gui._dropdown_open()
     root.update()
-    assert root.focus_get() is gui.chip_btns[-1], "状态组里 ← 该绕到最后一个按钮"
-    gui.chip_btns[-1].event_generate("<KeyPress>", keysym="Right")
+    assert gui.dlg_open and gui.dlg.winfo_ismapped(), "展开后面板该占位显示"
+    gui.ent_know.focus_force()
     root.update()
-    assert root.focus_get() is gui.chip_btns[0], "状态组里 → 该绕回第一个按钮"
-    gui.chip_btns[2].event_generate("<KeyPress>", keysym="Escape")
+    gui.ent_know.event_generate("<KeyPress>", keysym="Tab")
     root.update()
-    assert root.focus_get() is gui.tree, "状态按钮上按 Esc 该回表格（不清条件）"
+    assert root.focus_get() is gui.tree, "从面板里按 Tab 该跳到主页面"
+    assert not gui.dlg_open, "离开搜索站该把面板收起"
+    gui.ent_search.focus_force()
+    root.update()
+    gui._dropdown_open()
+    root.update()
+    gui.lb_status.focus_force()
+    root.update()
+    gui.lb_status.event_generate("<KeyPress>", keysym="Tab", state=0x1)
+    root.update()
+    assert root.focus_get() is gui.tree and not gui.dlg_open, \
+        "从状态列表按 Shift+Tab 也该回主页面并收起面板（两站环里两个方向同一条路）"
     # 页签 / 段卡片等「中间控件」都不进轮换：takefocus 关掉；Tab 处理只在 root 一处
     for w, name in ((gui.nb, "Notebook"), (gui.card_box[0], "段卡片"),
                     (gui.card_num[0], "卡片数字"), (gui.card_cap[0], "卡片标题")):
@@ -3251,15 +3457,15 @@ def smoke():
     for w, name in ((gui.tree, "总表树"), (gui.today_tree, "看板树"),
                     (gui.ent_search, "搜索框"),
                     (gui.ent_know, "知识点框"), (gui.ent_diff, "难度框"),
-                    (gui.chip_btns[0], "状态按钮"), (gui.filter_bar, "筛选区"),
+                    (gui.lb_status, "状态列表"), (gui.dlg, "下拉面板"),
                     (gui.nb, "Notebook"), (gui.tab_all, "总表页"),
                     (gui.tab_today, "看板页"), (gui.today_cards, "看板卡片区")):
         assert w.bind("<Tab>") == "" and w.bind("<Shift-Tab>") == "", \
             "%s 上也挂了 Tab 绑定（应该只在 root 一处处理）" % name
     assert root.bind_all("<Tab>") == "" and root.bind_all("<Shift-Tab>") == "", \
         "bind_all 上还有 Tab 处理"
-    print("(jj) Tab 五站轮换（v13）：主页面 → 搜索 → 知识点 → 难度 → 状态 → 主页面，正反两圈都"
-          "只停这五站；状态组里 ← / → 绕圈、Esc 回表格；页签 / 段卡片 takefocus 全关、"
+    print("(jj) Tab 两站轮换（v14）：主页面 ⇄ 搜索，正反两圈都只停这两站；面板里任意一行都按"
+          "「搜索」站算（Tab / Shift+Tab 都回主页面并收面板）；页签 / 段卡片 takefocus 全关、"
           "Tab 处理只在 root ✓")
 
     # --- v6 闸门 (t)：两个焦点各有可见指示（选中行换色 / 输入框边框 + 底色换强调色）
@@ -3488,22 +3694,22 @@ def smoke():
         "键位表里该有 Shift+Enter 打开原题那行（v12）：%r" % ks
     assert any(ln.startswith("Ctrl+Z") and "可连撤" in ln for ln in ks), \
         "键位表里 Ctrl+Z 那行该写出「可连撤」（v12）：%r" % ks
-    # v13：筛选区回来了（输入框 + 按钮，不是 v9 删的那个下拉框）——「筛选」那几个字可以有，
-    # 「下拉」不许有（窗口里没有下拉控件了，见 (ii)）；两条筛选区说明必须有。
-    assert "下拉" not in KEY_TABLE, "键位表里还有「下拉」字样（窗口里没有下拉控件）"
-    assert any(ln.startswith("筛选区") and "只筛总表" in ln for ln in ks), \
-        "键位表里该有筛选区那行（v13）：%r" % ks
-    assert any(ln.startswith("状态按钮上") and "Esc 回表格" in ln for ln in ks), \
-        "键位表里该有状态按钮那行（v13）：%r" % ks
-    assert any(ln.startswith("Tab / Shift+Tab") and "知识点" in ln and "难度" in ln for ln in ks), \
-        "键位表里 Tab 那行该写出五站（v13）：%r" % ks
+    # v14：搜索框下多了筛选下拉面板（用户点名就叫「下拉」）——键位表里禁的是 v9 删掉的
+    # 那种只读「下拉框」控件字样（窗口里 0 个 TCombobox，见 (ii)）；v14 新行必须有。
+    assert "下拉框" not in KEY_TABLE, "键位表里还有「下拉框」控件字样（v9 删的不是这个）"
+    assert any(ln.startswith("下拉面板") and "只筛总表" in ln for ln in ks), \
+        "键位表里该有下拉面板那行（v14）：%r" % ks
+    assert any(ln.startswith("面板里 ↓ / ↑") and "勾选" in ln for ln in ks), \
+        "键位表里该有面板内行走那行（v14）：%r" % ks
+    assert any(ln.startswith("Tab / Shift+Tab") and "主页面" in ln and "搜索" in ln for ln in ks), \
+        "键位表里 Tab 那行该写出两站（v14）：%r" % ks
     print("? 快捷键一览：%d 行键位表原文；Esc 关闭" % len(ks))
     gui.help_win.event_generate("<Escape>")
     root.update()
     assert gui.help_win is None, "Esc 应关掉一览"
     assert root.focus_get() is gui.tree, "关掉一览后焦点应回到表格"
     print("(kk) 一览与 KEY_TABLE 一字不差：%d 行、无裸 F 行（F5 / F11 不算）、"
-          "有 F11 全屏行、有筛选区两行（v13）、无「下拉」字样 ✓" % len(ks))
+          "有 F11 全屏行、有下拉面板两行（v14）、无「下拉框」控件字样 ✓" % len(ks))
     print("Esc 关闭一览、焦点回表格 ✓")
 
     # --- v4 闸门 (c)：搜索**跟题**（选中的题还在结果里 → 仍选它；被搜掉 → 回第一行）（v9：筛选半边删除）
@@ -3541,7 +3747,7 @@ def smoke():
     gui.var_search.set("")
     gui.refresh_view()
 
-    # --- v5 闸门 (i)：搜索框里 Enter / ↓ 跳回总表（搜索词保留、结果不丢、选中跟题）
+    # --- v5 闸门 (i)：搜索框里 Enter 跳回总表（搜索词保留、结果不丢、选中跟题；v14 起 ↓ 改作展开下拉）
     gui.var_search.set("")
     gui.refresh_view()
     hits = [x for x in gui.tree.get_children()
@@ -3567,15 +3773,18 @@ def smoke():
         "跳回总表后该保住的还是原来那道题（现在是 %s）" % (got and got["题号"],)
     gui.ent_search.focus_set()
     root.update()
-    gui.ent_search.event_generate("<KeyPress>", keysym="Down")   # ↓ 同效
+    gui.ent_search.event_generate("<KeyPress>", keysym="Down")   # v14：↓ = 展开筛选下拉（不再跳转）
     root.update()
-    assert root.focus_get() is gui.tree, root.focus_get()
-    assert gui.var_search.get() == "双指针", "↓ 跳转不该动搜索词"
+    assert gui.dlg_open and root.focus_get() is gui.ent_search, \
+        "v14 起搜索框 ↓ = 展开下拉（焦点留在搜索框、能接着打字）"
+    gui._dropdown_hide()
+    root.update()
+    assert not gui.dlg_open
     gui.nb.select(1)                                             # 看板页上跳转也先切回总表
     gui._jump_to_table()
     assert gui.nb.index(gui.nb.select()) == 0, "看板页上跳转要先切回总表页"
-    print("(i) 搜索框里 Enter / ↓ 跳回总表：焦点在表格、搜索词没清、结果仍是搜出来的、"
-          "选中跟题（看板页上先切回总表）✓")
+    print("(i) 搜索框里 Enter 跳回总表：焦点在表格、搜索词没清、结果仍是搜出来的、"
+          "选中跟题（看板页上先切回总表）；v14：↓ 改作展开筛选下拉 ✓")
     gui.var_search.set("")
     gui.refresh_view()
 
@@ -4497,8 +4706,9 @@ def smoke():
           "「CF1900」≡「CF 1900」= 188D；「CF900」空而「CF 900」子串命中 188D（v10 子串口径）；"
           "「cf800」= 两行 CF 800 ✓")
 
-    # --- v13 闸门 (zz)：筛选区 —— 多条件组合（知识点 / 状态 / 难度）只筛总表，
-    #     且与命令行是**同一份实现**（拿子进程真跑 status_report.py 的筛选模式比命中集合）
+    # --- v13 闸门 (zz)：筛选（v14 起并进搜索框下的下拉面板）—— 多条件组合
+    #     （知识点 / 状态 / 难度）只筛总表，且与命令行是**同一份实现**
+    #     （拿子进程真跑 status_report.py 的筛选模式比命中集合）
     # 前面的闸门改过夹具的状态并真写了盘（uu / vv）→ 先重造一份干净夹具再往下断言，
     # 否则「某状态有几行」这种硬编码期望会随前面闸门的副作用漂移。
     write_fixture(tmp)
@@ -4614,42 +4824,118 @@ def smoke():
             "GUI 与命令行命中集合不一致：`%s`\n  GUI=%r\n  CLI=%r" % (" ".join(argv), sorted(gui_keys), sorted(cli_keys))
         assert ("筛出 %d 题" % len(gui_keys)) in out, \
             "命令行报的条数跟命中集合对不上：%s\n%s" % (" ".join(argv), out)
-    print("(zz) 筛选区：知识点（子串 / 忽略空格 / 逗号并集）/ 状态多选（并集、可取消）/ 难度"
-          "（区间 / 单值 / <= / >= / 多值并集）三条件 AND 都对；写法不认的难度一条不匹配且点名；"
-          "**11 组条件逐组拿子进程真跑 status_report.py 比过命中集合，全部一字不差** ✓")
+    print("(zz) 筛选（v14：搜索框下的下拉面板）：知识点（子串 / 忽略空格 / 逗号并集）/ 状态多选"
+          "（并集、可取消）/ 难度（区间 / 单值 / <= / >= / 多值并集）三条件 AND 都对；写法不认的"
+          "难度一条不匹配且点名；**11 组条件逐组拿子进程真跑 status_report.py 比过命中集合，"
+          "全部一字不差** ✓")
 
-    # ⑥ 清空按钮 / 两个框的 Esc（清这一格 + 回表格）/ Enter 跳回总表
+    # ⑥ v14 面板交互：↓ 展开 / ↑ 收起 / ↑↓ 逐行走 / Esc 逐层退回 / 清空 / 「筛出 N 题」两处挂点
     _set(know="动态规划", diff=">=1700", sts=["不会"])
     assert len(gui.tree.get_children()) == 1 and gui.var_hits.get() != ""
     gui._clear_filters()
     root.update()
     assert len(gui.tree.get_children()) == len(FIXTURE_ROWS)
-    assert gui.var_hits.get() == "", "清空后「筛出 N 题」该消失：%r" % gui.var_hits.get()
-    gui.ent_know.focus_force()
+    assert gui.var_hits.get() == "" and gui.var_hits_min.get() == "", \
+        "清空后「筛出 N 题」两处都该消失：%r / %r" % (gui.var_hits.get(), gui.var_hits_min.get())
+    # ↓：第一下只展开（焦点留在搜索框）；再一下进「知识点」；逐行 ↓ 走到状态列表
+    assert not gui.dlg_open, "面板默认该是收起的"
+    gui.ent_search.focus_force()
     root.update()
+    gui.ent_search.event_generate("<KeyPress>", keysym="Down")
+    root.update()
+    assert gui.dlg_open and gui.dlg.winfo_ismapped() and root.focus_get() is gui.ent_search, \
+        "↓ 第一下只展开面板、焦点留在搜索框（还能接着打字）"
+    gui.ent_search.event_generate("<KeyPress>", keysym="Down")
+    root.update()
+    assert root.focus_get() is gui.ent_know, "↓ 第二下该进「知识点」"
+    gui.ent_know.event_generate("<KeyPress>", keysym="Down")
+    root.update()
+    assert root.focus_get() is gui.ent_diff, "知识点 ↓ 该到「难度」"
+    gui.ent_diff.event_generate("<KeyPress>", keysym="Down")
+    root.update()
+    assert root.focus_get() is gui.lb_status, "难度 ↓ 该到「状态」列表"
+    # 状态列表（多选清单）：↑↓ 只移光标；空格勾选；1~6 直勾 / 再按取消
+    gui.status_cursor = 0
+    gui.lb_status.event_generate("<KeyPress>", keysym="Down")
+    root.update()
+    assert gui.status_cursor == 1 and not gui.status_on, "↑↓ 只移光标、不该动勾选"
+    gui.lb_status.event_generate("<KeyPress>", keysym="space")
+    root.update()
+    assert gui.status_on == {STATES[1]}, gui.status_on
+    assert gui.var_hits.get() == "筛出 %d 题" % len(gui.tree.get_children()), gui.var_hits.get()
+    gui.lb_status.event_generate("<KeyPress>", keysym="3")
+    root.update()
+    assert gui.status_on == {STATES[1], STATES[2]}, gui.status_on
+    gui.lb_status.event_generate("<KeyPress>", keysym="3")
+    root.update()
+    assert gui.status_on == {STATES[1]}, "同一项再按一次 = 取消"
+    gui.lb_status.event_generate("<KeyPress>", keysym="Up")
+    gui.lb_status.event_generate("<KeyPress>", keysym="Up")
+    root.update()
+    assert gui.status_cursor == 0
+    gui.lb_status.event_generate("<KeyPress>", keysym="Up")      # 到顶再 ↑ = 退回难度框
+    root.update()
+    assert root.focus_get() is gui.ent_diff, "状态列表到顶再 ↑ 该退回难度框"
+    gui._clear_filters()
+    root.update()
+    # Esc 逐层退回：框里有字先清空（人留在本行）→ 空了上退一行 → 状态 → 难度 → 搜索框 → 收面板 → 回表格
     gui.var_know.set("树形DP")
     gui.refresh_view()
+    gui.ent_know.focus_force()
+    root.update()
     gui.ent_know.event_generate("<KeyPress>", keysym="Escape")
     root.update()
-    assert gui.var_know.get() == "" and root.focus_get() is gui.tree, "知识点框 Esc：清这一格 + 回表格"
-    gui.var_diff.set(">=1700")
-    gui.refresh_view()
+    assert gui.var_know.get() == "" and root.focus_get() is gui.ent_know, \
+        "知识点框 Esc：有字先清掉、人留在本行（v14 逐层退回）"
     gui.ent_diff.focus_force()
     root.update()
     gui.ent_diff.event_generate("<KeyPress>", keysym="Escape")
     root.update()
-    assert gui.var_diff.get() == "" and root.focus_get() is gui.tree, "难度框 Esc 同款"
+    assert root.focus_get() is gui.ent_know, "难度框空了再 Esc 该上退到知识点框"
+    gui.lb_status.focus_force()
+    root.update()
+    gui.lb_status.event_generate("<KeyPress>", keysym="Escape")
+    root.update()
+    assert root.focus_get() is gui.ent_diff, "状态列表 Esc 该退回难度框"
+    gui.var_search.set("双指针")
+    gui.refresh_view()
+    gui.ent_search.focus_force()
+    root.update()
+    gui.ent_search.event_generate("<KeyPress>", keysym="Escape")
+    root.update()
+    assert gui.var_search.get() == "" and root.focus_get() is gui.ent_search, "搜索框 Esc：有字先清空"
+    assert gui.dlg_open, "清空搜索词不该动面板"
+    gui.ent_search.event_generate("<KeyPress>", keysym="Escape")
+    root.update()
+    assert not gui.dlg_open and root.focus_get() is gui.ent_search, "空了再 Esc 该收起面板"
+    gui.ent_search.event_generate("<KeyPress>", keysym="Escape")
+    root.update()
+    assert root.focus_get() is gui.tree, "面板收着再 Esc 该回主页面"
+    # 「筛出 N 题」两处挂点：面板收起时挂到第一行右端；展开时回面板底部（同一行字）
+    gui.var_diff.set(">=1700")
+    gui.refresh_view()
+    root.update()
+    assert gui.var_hits.get() != "" and gui.var_hits_min.get() == gui.var_hits.get(), \
+        "面板收起时同一行字该挂到窗口第一行右端"
+    gui._dropdown_open()
+    root.update()
+    assert gui.var_hits_min.get() == "" and gui.var_hits.get() != "", \
+        "面板展开时只留面板底部那一处"
+    # 面板里 Enter = 带条件跳回总表（搜索词 / 条件保留），离开搜索站自动收面板
     gui.var_know.set("DP")
     gui.refresh_view()
+    n_before = len(gui.tree.get_children())
     gui.ent_know.focus_force()
     root.update()
-    gui.ent_know.event_generate("<KeyPress>", keysym="Down")
+    gui.ent_know.event_generate("<KeyPress>", keysym="Return")
     root.update()
-    assert root.focus_get() is gui.tree and gui.var_know.get() == "DP", "筛选框 ↓ 该带条件跳回总表"
+    assert root.focus_get() is gui.tree and gui.var_know.get() == "DP" \
+        and len(gui.tree.get_children()) == n_before, "知识点行 Enter 该带条件跳回总表"
+    assert not gui.dlg_open, "跳回总表 = 离开搜索站，面板该收起"
     gui.var_know.set("")
     gui.var_diff.set("")
     gui.refresh_view()
-    assert gui.var_hits.get() == "", "条件清空后计数该消失"
+    assert gui.var_hits.get() == "" and gui.var_hits_min.get() == "", "条件清空后计数该消失"
 
     # ⑦ 筛选只作用于总表：看板四段数字 / 计数行不受筛选影响（跟搜索一个口径）
     _set(know="动态规划", sts=["待重写"])
@@ -4667,7 +4953,8 @@ def smoke():
     gui._clear_filters()
     root.update()
     assert len(gui.tree.get_children()) == len(FIXTURE_ROWS)
-    print("⑦（同 (zz)）清空 / Esc / Enter / 看板不受影响 / 筛选 ∧ 搜索取交集 ✓")
+    print("⑦（同 (zz)）v14 面板：清空 / Esc 逐层退回 / 两处计数挂点 / Enter 跳回 / 看板不受影响 / "
+          "筛选 ∧ 搜索取交集 ✓")
 
     # --- v13 闸门 (yy)：菜单「题解包」三项在（导入 / 导出 / ── / 一键校验）；报告窗能建能写；
     # 有任务在跑时三入口一律拦下（不弹选包框）。真跑导入由 CLI 闸门（--pack-check）覆盖。
@@ -4803,7 +5090,7 @@ def pack_cli(args):
 # ================================================================ 入口
 def main(argv):
     ap = argparse.ArgumentParser(
-        description="题目状态跟踪窗口 v13（tkinter）：全键盘改状态 + 多条件筛选（知识点 / 状态 / 难度），"
+        description="题目状态跟踪窗口 v15（tkinter）：全键盘改状态 + 搜索框下拉里的多条件筛选（知识点 / 状态 / 难度），"
                     "只改目标行的状态 / 日期；菜单「题解包」= 导入 / 导出 / 一键校验。")
     ap.add_argument("--file", default=DEFAULT_FILE, help="状态表路径（默认 %s）" % DEFAULT_FILE)
     ap.add_argument("--selftest", action="store_true",

@@ -130,7 +130,7 @@ python tools/status_report.py    # today's queue: to-rewrite / to-upsolve / D+7 
 python tools/status_gui.py       # Tkinter GUI
 ```
 
-GUI keys: `1`-`6` set state ｜ `Enter` popup ｜ `Ctrl+Z` undo ｜ `Shift+Enter` open the original problem ｜ `F11` fullscreen. Only the target row is touched; every write is backed up first.
+GUI keys: `1`-`6` set state ｜ `Enter` popup ｜ `Ctrl+Z` undo ｜ `Shift+Enter` open the original problem ｜ `F11` fullscreen ｜ `↓` in the search box opens the filter panel (knowledge / difficulty / status). Only the target row is touched; every write is backed up first.
 
 <img src="docs/demo-gui.gif" width="900" alt="Recorded run of status_gui.py: number keys change the state, Ctrl+Z undoes, the problem page and the archive record open">
 
