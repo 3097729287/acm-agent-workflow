@@ -166,11 +166,16 @@ def load_samples(path):
 
 
 def compile_cpp(src, exe=None):
-    """编译一份 .cpp，返回 exe 路径。编译不过直接抛。"""
+    """编译一份 .cpp，返回 exe 路径。没装 g++ 或编译不过都抛 RuntimeError（由 main 记「未验证」）。"""
     src = os.path.abspath(src)
     exe = exe or (os.path.splitext(src)[0] + ".exe")
     cmd = ["g++"] + GXX_FLAGS + ["-o", exe, src]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except OSError:
+        raise RuntimeError(
+            "PATH 里找不到 g++ —— 装一个（Windows 走 MSYS2 的 ucrt64\\bin 加进 PATH，"
+            "见知识库《环境准备》），或如实记「未验证」，不许假装跑过。")
     if r.returncode != 0:
         raise RuntimeError("编译失败：%s\n%s\n%s" % (src, " ".join(cmd), r.stderr))
     warn = (r.stderr or "").strip()
@@ -541,6 +546,12 @@ def main(solution=None, brute=None, gen=None, edges=None, limits=None,
     except subprocess.TimeoutExpired as e:
         _say("★超时★ 卡在：%s" % e)
         _say("  超时不等于「结果为零」——先确认观测对象对不对（06 的探针自证）。")
+    except RuntimeError as e:
+        # 多半是「没装 g++」或「编译没过」——后者也不该甩 traceback，而是如实记「未验证」
+        _say("★%s" % e)
+        _say("  后面几档全部记「未验证」——这档没过就不许有结论。")
+        for k in ("编译", "官方样例", "边界用例", "随机对拍", "极限计时"):
+            r.results.setdefault(k, ("skip", "未验证（编译没过）"))
     return r.report(title)
 
 

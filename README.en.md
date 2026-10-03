@@ -30,7 +30,7 @@ This repo hands the whole workflow to an **AI agent** (Claude Code / Codex / any
 ## Quick start (5 minutes)
 
 ```bash
-git clone https://github.com/<you>/acm-agent-workflow
+git clone https://github.com/3097729287/acm-agent-workflow
 cd acm-agent-workflow
 
 python install.py           # writes config.json (points at the bundled demo) + env check + demo gate
@@ -62,7 +62,7 @@ python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
   极限计时     通过     极限：|x|=8×10^5 全零串, k=10^5 0.007 s、极限：|x|=8×10^5 随机十六进制, k=10^5 0.007 s
 ```
 
-Tier names: compile / samples / edge cases / stress test / time limits — all PASS.
+Tier names: compile / samples / edge cases / stress test / time limits — all PASS. (Output above is verbatim from a real run; timings vary by machine.)
 
 ## Tutorial: run one full round
 
@@ -173,7 +173,7 @@ No hard-coded paths: set `AGENT_CP_TOOLS` / `AGENT_CP_CONFIG` to relocate the to
 
 ## Contributing
 
-Issues and PRs welcome. Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest` and `selfcheck_unpair.py` are ready-made regressions).
+Issues and PRs welcome. Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest` and `selfcheck_unpair.py` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
 
 ## License
 

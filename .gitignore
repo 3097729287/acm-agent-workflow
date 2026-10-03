@@ -17,11 +17,13 @@ tools/package-lock.json
 *.exe
 
 # 验证跑完会重建的耗材（可随手删、重跑即回来）
-demo/**/_work/raw/
-demo/**/_work/题面/
-demo/**/_work/from_md/
-demo/**/__pycache__/
+**/_work/
+__pycache__/
 
-# 编辑器
+# 图形端本地配置（status_gui.py 会写）
+tools/status_gui.config.json
+
+# 编辑器 / agent 本地目录
 .vscode/
 .idea/
+.claude/

@@ -691,7 +691,7 @@ class ImeGuard(object):
     Windows 给**每个窗口**默认都关联了输入法上下文（可编辑控件 Tk 自己会管，非输入控件没人摘）。
 
     机制：ImmAssociateContext(hwnd, 0) 摘掉、ImmAssociateContext(hwnd, imc) 还原（imc = 摘掉时
-    返回的旧上下文，各自存好）；每个 HWND 各摘自己那一份、互不影响（2026-10-03 本机实测）。
+    返回的旧上下文，各自存好）；每个 HWND 各摘自己那一份、互不影响（2026-10-03 实测）。
     窗口建好后把主窗口里所有控件的 HWND 都摘一遍；之后靠 <FocusIn> 兜底（挂 root + 各 Toplevel
     —— 实测独立窗口的 <FocusIn> 不会冒到 root 上）：拿到焦点的是搜索框 → 还原 搜索框 + 主窗口，
     是别的控件 → 把它的 HWND 摘掉（没见过的 HWND 也照摘）。
@@ -704,7 +704,7 @@ class ImeGuard(object):
         self.root = root
         self.keep = tuple(w for w in keep if w is not None)  # 允许收中文的控件（搜索框）
         self.available = False   # 「可用」标志：置假 = 整条守卫 no-op（冒烟 (gg) 用它验降级路径）
-        self.default_ctx = None  # 摘之前主窗口的上下文（= 线程默认；本机没有输入法环境时是 None）
+        self.default_ctx = None  # 摘之前主窗口的上下文（= 线程默认；系统没有输入法环境时是 None）
         self._imm = None
         self._saved = {}         # hwnd(int) -> 摘掉时存下的旧上下文（attach 用它还原）
         try:
@@ -932,7 +932,7 @@ class StatusGui(object):
     # ------------------------------------------------------------ 全屏（v11）
     def _is_fullscreen(self):
         """现在在全屏吗？`wm attributes -fullscreen` 的返回值随平台 / Tk 版本是 int 或 str
-        （本机实测 = int 0/1）—— 一律归一成 bool；拿不到就当没全屏。"""
+        （实测 = int 0/1）—— 一律归一成 bool；拿不到就当没全屏。"""
         try:
             v = self.root.attributes("-fullscreen")
         except tk.TclError:
@@ -2346,22 +2346,22 @@ def smoke():
         _imm.ImmGetContext.argtypes = [ctypes.c_void_p]
         imm_ok = True
     except Exception as e:
-        print("(dd)~(ff) ★ 跳过：本机拿不到 imm32（%s）" % e)
+        print("(dd)~(ff) ★ 跳过：拿不到 imm32（%s）" % e)
 
     def _hctx(w):
         return _imm.ImmGetContext(ctypes.c_void_p(w.winfo_id()))
 
     if not imm_ok:
-        print("(dd)~(ff) ★ 跳过：本机拿不到 imm32 —— 不假装通过")
+        print("(dd)~(ff) ★ 跳过：拿不到 imm32 —— 不假装通过")
     else:
         # 「跳不跳」要独立量一次：新造一个没被守卫碰过的控件，它的上下文 = 线程默认；
-        # 只有它也是 None（本机根本没有输入法环境）才允许跳过 —— 「守卫自己没跑」不在此列。
+        # 只有它也是 None（系统根本没有输入法环境）才允许跳过 —— 「守卫自己没跑」不在此列。
         probe_w = tk.Frame(root)
         probe_w.update_idletasks()
         default_seen = _hctx(probe_w)
         probe_w.destroy()
         if default_seen is None:
-            print("(dd)~(ff) ★ 跳过：本机没有输入法上下文（新控件 ImmGetContext 也是 None）"
+            print("(dd)~(ff) ★ 跳过：系统没有输入法上下文（新控件 ImmGetContext 也是 None）"
                   "—— 不假装通过")
         else:
             assert gui.ime.available, "imm32 拿得到、守卫就该是可用的"
@@ -2781,7 +2781,7 @@ def smoke():
     print("(e) 浮层里按 %d → 直接写入「%s」+ 日期今天 ✓" % (key4, want4))
 
     # --- v3 闸门 (f)：页签选中只换色、不改尺寸
-    # 注：ttk.Notebook.bbox 在本机 Tk 恒返回 (0,0,0,0)（实测），所以用两条真能照出问题的量：
+    # 注：ttk.Notebook.bbox 在某些 Tk 版本恒返回 (0,0,0,0)（实测），所以用两条真能照出问题的量：
     #   ① 决定标签尺寸的样式项 padding / font 在「选中 / 未选中」两态必须相同
     #      —— clam 默认 padding 是「选中 6 4 6 2 / 未选中 6 2 6 2」，选中时会高 2px（v2 就是这个）
     #   ② 页面 reqwidth 前后一致（派发里点名的口径）

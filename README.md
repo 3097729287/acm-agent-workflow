@@ -30,7 +30,7 @@
 ## 快速开始（5 分钟）
 
 ```bash
-git clone https://github.com/<you>/acm-agent-workflow
+git clone https://github.com/3097729287/acm-agent-workflow
 cd acm-agent-workflow
 
 python install.py           # 生成 config.json（默认指向自带示例）+ 环境体检 + 跑示例闸门
@@ -62,6 +62,8 @@ python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
   随机对拍     通过     500 组全一致
   极限计时     通过     极限：|x|=8×10^5 全零串, k=10^5 0.007 s、极限：|x|=8×10^5 随机十六进制, k=10^5 0.007 s
 ```
+
+（上面的输出是逐字实测结果；秒数随机器的快慢浮动，以你自己机器上的实跑为准。）
 
 ## 使用教程：完整跑一场比赛
 
@@ -196,7 +198,7 @@ acm-agent-workflow\
 
 ## 贡献
 
-Issue / PR 欢迎。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_unpair.py` 是现成的回归）。
+Issue / PR 欢迎。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_unpair.py` 是现成的回归）。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑（不带参数）就是执行验证。
 
 ## License
 

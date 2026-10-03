@@ -15,7 +15,7 @@ check_solution —— 题解 md 交付前的自检器
       孤立的 `$` / 未闭合的 `$$`。2026-10-02 口径**反转**：数学**应当**写
       LaTeX（Typora 已勾「内联公式」），以前报「有 $」，现在报「$ 不配对」
   1b. 反斜杠命令落在 `$` **外**（漏包）：`\le`、`\times` 这些出现在公式外面的
-      —— 用的是**无歧义命令表**，不会把 Windows 路径 `牛客143\DSH`、`\crosscheck.py`
+      —— 用的是**无歧义命令表**，不会把 Windows 路径 `Round1\B`、`\crosscheck.py`
          误判成残留（详见《工具链》的坑表）
   2.  **LaTeX 完整度**：跑一遍 unify_latex 的转换逻辑（判定与转换器**同一套**），
       还有可转的片段 = 没跑过转换、或转换后被手改回去了。取代原「老式下标 a_i」
@@ -78,7 +78,7 @@ except Exception:                                     # 与 KaTeX 验证管线�
     _EM = None
 
 # 无歧义 LaTeX 命令表：只列**绝不可能是 Windows 路径片段**的。
-# `\DSH`、`\crosscheck`、`\max_*.in` 这类一概不进表，否则天天误报。
+# `\build`、`\crosscheck`、`\max_*.in` 这类一概不进表，否则天天误报。
 LATEX_CMDS = [
     "le", "le ", "leq", "leqq", "ge", "geq", "geqq", "neq", "ne ",
     "times", "cdot", "div", "pm", "mp", "frac", "tfrac", "dfrac",
