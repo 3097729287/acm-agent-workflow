@@ -270,6 +270,12 @@ A deliberately broken counterpart ships in `examples\`: the same format gate fla
 
 Issues and PRs welcome; to contribute your own editorial, see [CONTRIBUTING.md](CONTRIBUTING.md) (drop the exported pack into `contributions\` and open a PR — CI validates it for the maintainer first). Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest`, `selfcheck_filter.py`, `selfcheck_import.py`, `check_contributions.py`, `knowledge_dict.py selftest` and `fetch_problem.py --selftest` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
 
+## Contact
+
+**The simplest way to send me your editorial: add me on QQ (Tencent IM) — `3660535264`** (put "题解投稿" in the friend request), then drop the exported solution-pack zip into the chat. It goes through exactly the same validation and import as a PR, and your credit is kept. Can't export a pack? Send the editorial markdown and source files as they are — I'll pack them for you.
+
+Issues and PRs work too — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 [MIT](LICENSE)

@@ -315,7 +315,7 @@ acm-agent-workflow\
 ├── AGENTS.md            ← 给 AI agent 的规则主干（11 条铁律）
 ├── README.md / README.en.md
 ├── LICENSE（MIT）
-├── CONTRIBUTING.md      ← 怎么投稿一场自己的题解（两条路径 / 包格式）
+├── CONTRIBUTING.md      ← 怎么投稿一场自己的题解（三条路径 / 包格式）
 ├── install.py           ← 安装助手
 ├── config.example.json
 ├── knowledge\           ← 知识库明细（16 篇）
@@ -331,7 +331,17 @@ acm-agent-workflow\
 
 ## 贡献
 
-Issue / PR 欢迎；想投稿自己的题解，见 [CONTRIBUTING.md](CONTRIBUTING.md)（把导出的包放进 `contributions\` 提 PR，CI 会先替你把包校验一遍）。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_filter.py`、`selfcheck_import.py`、`check_contributions.py`、`knowledge_dict.py selftest`、`fetch_problem.py --selftest` 是现成的回归）。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑（不带参数）就是执行验证。
+Issue / PR 欢迎；想投稿自己的题解，见 [CONTRIBUTING.md](CONTRIBUTING.md)（把导出的包放进 `contributions\` 提 PR，CI 会先替你把包校验一遍）。**不想折腾 git？加 QQ `3660535264` 直接把题解发我**——见文末[「联系与投稿」](#联系与投稿)。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_filter.py`、`selfcheck_import.py`、`check_contributions.py`、`knowledge_dict.py selftest`、`fetch_problem.py --selftest` 是现成的回归）。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑（不带参数）就是执行验证。
+
+## 联系与投稿
+
+**最省事的投稿路径：加 QQ，把题解直接发给我。**
+
+- **QQ：3660535264** —— 加好友备注「题解投稿」即可。把 `export_solution.py` 导出的题解包 zip
+  拖进聊天窗口发过来就行；不会导出也没关系——题解 md、代码文件直接发，我这边替你打包。
+- 收到的包走**和提 PR 完全同一条校验命令**（`check_contributions.py` 校验 → `import_solution.py` 导入），
+  你的署名（`export_solution.py --contributor 你的ID`）跟着索引保留——两条路的待遇没有任何差别。
+- 想讨论题、报 bug、提建议，也欢迎加这个 QQ；不想加的话照旧走 [Issues](https://github.com/3097729287/acm-agent-workflow/issues) / PR。
 
 ## License
 
