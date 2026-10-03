@@ -159,7 +159,8 @@ def default_contributor():
     import subprocess
     try:
         p = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True,
-                           timeout=10, cwd=toolutil.REPO_ROOT)
+                           timeout=10, cwd=toolutil.REPO_ROOT,
+                           encoding="utf-8", errors="replace")
         if p.returncode == 0 and p.stdout.strip():
             return p.stdout.strip()
     except OSError:

@@ -63,7 +63,8 @@ def _j(v):
 
 def run(cmd):
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                           encoding="utf-8", errors="replace")
         line = (p.stdout or p.stderr).strip().splitlines()
         return p.returncode, line[0] if line else ""
     except (OSError, subprocess.TimeoutExpired):

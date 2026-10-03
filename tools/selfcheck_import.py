@@ -35,7 +35,8 @@ TOOLS = os.path.join(toolutil.REPO_ROOT, "tools")
 def run(args):
     """跑一个同目录脚本 → (退出码, stdout+stderr)"""
     cmd = [sys.executable, os.path.join(TOOLS, args[0])] + args[1:]
-    p = subprocess.run(cmd, capture_output=True, text=True, cwd=toolutil.REPO_ROOT)
+    p = subprocess.run(cmd, capture_output=True, text=True, cwd=toolutil.REPO_ROOT,
+                       encoding="utf-8", errors="replace")
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -55,7 +56,7 @@ def new_root(base, name):
     root = os.path.join(base, name)
     p = subprocess.run([sys.executable, os.path.join(toolutil.REPO_ROOT, "install.py"),
                         "--new-data", root], capture_output=True, text=True,
-                       cwd=toolutil.REPO_ROOT)
+                       cwd=toolutil.REPO_ROOT, encoding="utf-8", errors="replace")
     if p.returncode != 0:
         raise SystemExit("★ install.py --new-data 失败：\n" + (p.stdout or "") + (p.stderr or ""))
     mem = os.path.join(base, name + "-knowledge")

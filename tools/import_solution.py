@@ -238,7 +238,8 @@ def validate(pack_dir, root, rep, mem, check_sol=True):
         if check_sol:
             cs = os.path.join(toolutil.REPO_ROOT, "tools", "check_solution.py")
             pr = subprocess.run([sys.executable, cs, md, "--quiet"],
-                                capture_output=True, text=True)
+                                capture_output=True, text=True,
+                                encoding="utf-8", errors="replace")
             tail = (pr.stdout or pr.stderr).strip().splitlines()
             if pr.returncode == 0:
                 rep.ok("4 题解 md", "%s 过 17 项自检（%s）"
