@@ -138,6 +138,8 @@ python tools/status_gui.py       # 图形端（Tkinter）
 
 图形端键位：`1`~`6` 直接改状态 ｜ `Enter` 浮层 ｜ `Ctrl+Z` 连撤 ｜ `Shift+Enter` 开原题 ｜ `F11` 全屏 ｜ 搜索框 `↓` 展开筛选面板（知识点 / 难度 / 状态多选）。只动目标行、写前自动备份、非法状态拒写。
 
+想改界面？每个部位的标准叫法（第一行 / 筛选面板 / 选包窗 / 报告窗…）见 [docs/status_gui-布局说明.md](docs/status_gui-布局说明.md)，照那个名字提需求就行。
+
 <img src="docs/demo-gui.gif" width="900" alt="status_gui.py 实跑：按数字键改状态 → Ctrl+Z 连撤 → 打开原题与归档记录">
 
 ## 题解共享：一场题解的导入 / 导出

@@ -132,6 +132,8 @@ python tools/status_gui.py       # Tkinter GUI
 
 GUI keys: `1`-`6` set state ｜ `Enter` popup ｜ `Ctrl+Z` undo ｜ `Shift+Enter` open the original problem ｜ `F11` fullscreen ｜ `↓` in the search box opens the filter panel (knowledge / difficulty / status). Only the target row is touched; every write is backed up first.
 
+Modifying the UI? The standard name of every part (first row / filter panel / pick-pack dialog / report dialog…) is documented in [docs/status_gui-布局说明.md](docs/status_gui-布局说明.md) — name the part and state the change.
+
 <img src="docs/demo-gui.gif" width="900" alt="Recorded run of status_gui.py: number keys change the state, Ctrl+Z undoes, the problem page and the archive record open">
 
 ## Sharing solutions: export / import a solution pack
