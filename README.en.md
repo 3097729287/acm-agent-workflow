@@ -1,71 +1,132 @@
 # acm-agent-workflow
 
-**An AI-agent pipeline for competitive-programming upsolving: solutions, verification, and archiving.** It turns "write solutions and forget about them" into a pipeline with machine-checked gates: fetch statements → write code → four-tier verification → render the write-up → format gate → archive reconciliation, plus a status tracker for every problem you upsolve (with a GUI).
+**An upsolving pipeline for competitive programming — from fetching the statement to archiving the write-up, driven end-to-end by an AI agent, with a machine gate at every step.**
 
-[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [中文](README.md) ｜ Windows-first (GUI) ｜ Core pipeline CI-green on Ubuntu / macOS / Windows × Python 3.9 / 3.13 ｜ MIT License ｜ Currently **v0.1.0 (early preview)** — feedback welcome via [Issues](https://github.com/3097729287/acm-agent-workflow/issues)
+Not "please be careful, agent" — **run one command, read the exit code**: every measured number comes verbatim from a real run, the editorial format is checked item by item (17 checks), and archiving only counts as done when the reconciliation exits 0. You just review.
+
+[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [中文](README.md) ｜ [Online docs](https://3097729287.github.io/acm-agent-workflow/) ｜ [MIT](LICENSE) ｜ **v0.1.0 (early preview)** — feedback welcome via [Issues](https://github.com/3097729287/acm-agent-workflow/issues)
 
 ---
 
-## What this is
+## Pick a path
 
-You compete on NowCoder / Codeforces / Luogu. After the contest you need to upsolve problems, write editorials, and archive algorithm notes — but **nothing enforces quality**: formats drift, verification is hearsay, archiving depends on memory.
-
-This repo hands the whole workflow to an **AI agent** (Claude Code / Codex / anything that can read files and run commands), and **every step has a machine gate** — not "please be careful", but *run this command, check the exit code*:
-
-| Gate | Command | Passing looks like |
+| Who you are | Start here | Takes |
 |---|---|---|
-| Verification | `verify.py` | Four tiers (samples / edge / stress / limits) with real numbers |
-| Format | `check_solution.py` | 17 checks, each reporting the offending line |
-| Archive | `archive_check.py RoundNNN` | **Exit code 0** = library, indexes and knowledge base all reconcile |
-| Demo | `python install.py --check` | Runs the bundled example end-to-end right after install |
+| **Competitive programmer** — just want to use it, no agent involved | [**Path A: Just use it**](#path-a-just-use-it) | 3 minutes |
+| **You have an AI agent** (Claude Code / Codex / Cursor…) | [**Path B: Hand it to an agent**](#path-b-hand-it-to-an-ai-agent) | one sentence |
+| **Contributing an editorial / wiring up CI / hacking on the code** | [**Path C: Contribute and develop**](#path-c-contribute-and-develop) | as needed |
+| Just want to know **why it's trustworthy** | [The four gates](#why-its-trustworthy-four-gates) | 1 minute |
 
-## What it solves
+## Path A: Just use it
 
-- **Fabricated "verification logs"?** Not allowed. Numbers must come verbatim from real runs; tiers you didn't run are honestly marked "unverified". The repo ships a [counter-example](knowledge/11-反面教材.md) (in Chinese): a log that looked real and failed on the first replay.
-- **Editorial format drift?** The section whitelist is enforced line-by-line by `check_solution.py`.
-- **Re-explaining an algorithm you already covered?** A cross-round ledger tracks what's been taught; repeats get a pointer, first-timers get a from-scratch section.
-- **Forgetting your upsolve queue?** Every non-trivial problem lands in `题目状态.md` with a six-state lifecycle; `status_report.py` prints today's queue and a Tkinter GUI edits states with one keypress.
-- **Losing files while reorganizing?** Content-hash reconciliation tooling — comparing by filename lies when same-named files overwrite each other.
+**No Python needed (Windows):** grab `TimuZhuangtai-v0.1.0-win64.zip` from [Releases](https://github.com/3097729287/acm-agent-workflow/releases), unzip it, double-click `TimuZhuangtai.exe`.
 
-## Track record
+One window manages your problem-status table: today's upsolving queue, `1`~`6` to change a status (every write is backed up first), import/export solution packs. A sample dataset ships inside, so it works out of the box; to point it at **your own** data, edit `config.json` inside the folder (three fields, see [Configuration](#configuration-configjson)).
 
-This isn't a slide deck — it's the author's daily pipeline (as of 2026-10-03):
-
-- **9 NowCoder weekly rounds** (Round 123–163) processed through the full six steps; Round 163 (a full round) and Round 161's C–E (a mini round showing the cross-round ledger) ship in this repo's `demo\`;
-- **43 problems** moving through the upsolve status table (can't → to-rewrite → reproduced-AC → solved-independently → consolidated);
-- **32** four-tier verification drivers, re-runnable with the code;
-- **57 archive records** across **31 algorithm folders**.
-
-## Quick start (5 minutes)
+**With Python 3.9+ (Windows / macOS / Linux):**
 
 ```bash
 git clone https://github.com/3097729287/acm-agent-workflow
 cd acm-agent-workflow
-
-python install.py           # writes config.json (points at the bundled demo) + env check + demo gate
+python install.py                # environment check + runs every gate against the bundled sample
+python tools/status_report.py    # today's queue: ①to-rewrite ②to-upsolve ③review ④spot-check
+python tools/status_gui.py       # the GUI
 ```
 
-The check prints Python / g++ / node status and then runs the demo gate — `archive_check.py` reconciling both bundled rounds, **exit code 0**:
+`status_report.py` can also filter: `--todo --knowledge DP` (DP problems you haven't cracked yet), `--status 未做,不会 --difficulty 1200-1600`.
 
+GUI keys: `1`~`6` set status ｜ `Enter` overlay ｜ `Ctrl+Z` undo chain ｜ `Shift+Enter` open the problem page ｜ `F11` fullscreen ｜ `↓` in the search box opens the filter panel. Only the targeted row is touched, invalid states are refused.
+
+Want to build your own exe (same code as the CLI — `TimuZhuangtai.exe --pack-check pack.zip` also works): see [docs/打包图形端exe.md](docs/打包图形端exe.md) (Chinese).
+
+<img src="docs/demo-gui.gif" width="900" alt="Recorded run of status_gui.py: number keys change the state, Ctrl+Z undoes, the problem page and the archive record open">
+
+> Want an agent to **write** the editorials and run the verification? Go to Path B.
+
+## Path B: Hand it to an AI agent
+
+```bash
+git clone https://github.com/3097729287/acm-agent-workflow
+cd acm-agent-workflow
+python install.py      # needs only Python 3.9+, zero third-party packages; g++ / node optional
 ```
-  Python      3.14.7  OK
-  g++         g++ (Rev4, Built by MSYS2 project) 16.2.0  OK
-  node        v24.18.1  OK
-  == 示例闸门：archive_check.py Round163（自带示例数据）==
-  [通过] Round163 退出码 0（0 = 四处对账通过）
-  == 示例闸门：archive_check.py Round161（自带示例数据）==
-  [通过] Round161 退出码 0（0 = 四处对账通过）
+
+Open this directory with your agent (with Claude Code, just `cd` into it) and say one sentence:
+
+> Read AGENTS.md at the repo root, then process this contest: `https://ac.nowcoder.com/acm/contest/<id>`
+
+(A whole-contest Luogu URL works the same way.) It walks the six steps by itself:
+
+**fetch statement → calibrate depth → write code + verification driver → four-tier verification → write editorial + 17-item self-check → re-verify + archive reconciliation**
+
+You only look at two things: **the measured numbers it reports** (they must come verbatim from a real run) and **exit code 0**.
+
+<img src="docs/demo-install.gif" width="900" alt="Recorded run of the installer: env check + sample gates, exit code 0">
+
+What each step leaves on disk: see [What a finished round leaves on disk](#what-a-finished-round-leaves-on-disk).
+
+**Point it at your own data** (the default data root is the bundled sample `demo\`):
+
+```bash
+python install.py --new-data D:\my-cp     # scaffold your own data root (folders + template + empty index/status table)
+python install.py --data-root D:\my-cp    # point config.json at it
 ```
 
-(Script output is Chinese — the project is CN-first. g++ and node are optional: without g++ the verification tiers are honestly reported as "unverified"; node only powers the KaTeX math render check.)
+## Path C: Contribute and develop
 
-<img src="docs/demo-install.gif" width="900" alt="Recorded run of python install.py --check: env check + demo gate, exit code 0">
+**Send in one round's editorial.** Export a solution pack first:
 
-Then run a full four-tier verification on the bundled examples (a complete round, plus a three-problem mini round, from NowCoder Weekly):
+```bash
+python tools/export_solution.py Round163     # -> 牛客周赛Round163.zip
+```
+
+| Your situation | How to send it |
+|---|---|
+| You know git | fork → drop the zip into `contributions\` → open a PR; CI validates each pack for you |
+| You don't know git | Add the maintainer on QQ **3660535264** (note "题解投稿") and send the zip; or attach it to an [Issue](https://github.com/3097729287/acm-agent-workflow/issues) |
+| Can't even export a pack | Send the editorial markdown + source files as they are; the maintainer packs them for you |
+
+All three routes **go through the same importer and the same validation, and your credit is kept**. Details in [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
+
+**Hang the format gate on your own repo** (GitHub Action — a failing editorial turns your CI red):
+
+```yaml
+- uses: actions/checkout@v4
+- uses: 3097729287/acm-agent-workflow@main
+  with:
+    path: 'editorials/**/*.md'   # which markdown files are editorials is up to you (multiple / dirs / globs)
+```
+
+Your repo does not have to look like this one. Inputs, exit codes and graceful degradation are documented in [docs/格式闸Action.md](docs/格式闸Action.md) (Chinese), along with how to dry-run it locally.
+
+**Just want the editorial QC skill** (Claude Code):
+
+```bash
+git clone https://github.com/3097729287/acm-agent-workflow
+cp -r acm-agent-workflow/skills/check-solution ~/.claude/skills/
+```
+
+Then say "run the editorial QC on 我的题解.md": 17 format checks, every complaint carries a line number and the offending sentence. See [skills/check-solution/README.md](skills/check-solution/README.md) (Chinese).
+
+**Hacking on the code**: run the matching self-test first (most scripts take `--help`): `status_gui.py --selftest`, `selfcheck_filter.py`, `selfcheck_import.py`, `check_contributions.py`, `knowledge_dict.py selftest`, `fetch_problem.py --selftest`. Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
+
+## Why it's trustworthy: four gates
+
+| Gate | Command | Passing means |
+|---|---|---|
+| Verification | `verify_<letter>.py` | Four tiers (samples / edge cases / stress test / time limits) each report **measured numbers** |
+| Format | `check_solution.py <md>` | All 17 checks pass, each reporting the offending line and sentence |
+| Archive | `archive_check.py RoundNNN` | **Exit code 0** = algorithm library, indexes and knowledge base all reconcile |
+| Install | `python install.py --check` | Runs every gate against the bundled sample (check only — writes nothing) |
+
+Two hard rules: **no fabricated logs** — a tier you didn't run says "unverified", and the repo ships a [counter-example](knowledge/11-反面教材.md) (Chinese): a log that looked completely real and failed on the very first replay; **no hand-edited indexes** — index tables are generated from the record files (`index_sync.py`), a single source of truth.
+
+## What ships in the box
+
+`demo\` holds two **real** rounds: NowCoder Weekly Round 163 (a full round) and Round 161's C~E (a mini round demonstrating the cross-round ledger). Clone it and run:
 
 ```bash
 python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
-python demo/题解/牛客周赛/Round161/A-F/C/verify_c.py
 ```
 
 ```
@@ -76,38 +137,36 @@ python demo/题解/牛客周赛/Round161/A-F/C/verify_c.py
   极限计时     通过     极限：|x|=8×10^5 全零串, k=10^5 0.007 s、极限：|x|=8×10^5 随机十六进制, k=10^5 0.007 s
 ```
 
-Tier names: compile / samples / edge cases / stress test / time limits — all PASS. (Output above is verbatim from a real run; timings vary by machine.)
+Tier names: compile / samples / edge cases / stress test / time limits — all PASS. (Output above is verbatim from a real run; timings vary by machine. Script output is Chinese — the project is CN-first.)
 
 <img src="docs/demo-verify.gif" width="900" alt="Recorded run of verify_b.py: compile / samples / edge / stress / limits — all PASS">
 
-## Tutorial: run one full round
+`examples\` carries a **deliberately broken editorial**: the same format gate flags it with eight red items and exit code 1 — run it once and you see exactly what the gate catches.
 
-### Step 0 — point your agent at the rules
+This is not a slide deck — it's the author's daily pipeline: **9 NowCoder weekly rounds** through the full six steps, **43 problems** moving through the status table, **57 archive records** across **31 algorithm folders** (as of 2026-10-03).
 
-Open this repo in Claude Code (or any agent) and say:
+---
 
-> Read AGENTS.md at the repo root, then process this contest: `https://ac.nowcoder.com/acm/contest/<id>`
+# Technical reference
 
-`AGENTS.md` is the rule backbone (11 laws + an index table); details live in `knowledge\` (16 docs, in Chinese) and are read on demand.
+## What a finished round leaves on disk
 
-### The six-step pipeline
-
-| Step | Command (the agent runs these) | Output | Gate |
+| Step | What the agent runs | Output | Gate |
 |---|---|---|---|
-| 1. Fetch | `python tools/fetch_problem.py <URL>` | statements + sample tables + difficulty suggestions | fetched count == problem count |
-| 2. Calibrate | (agent checks the "already taught" ledger) | what to explain, how deep | — |
+| 1. Fetch | `python tools/fetch_problem.py <URL>` (NowCoder / Luogu) | statements + sample tables + difficulty suggestions under `RoundN\_work\` | fetched count == problem count |
+| 2. Calibrate | consults the "already taught" ledger + the tier table | what to explain, how deep | — |
 | 3. Code | one folder per problem `RoundN\<range>\<letter>\` | `x.cpp` + brute force + `verify_x.py` | — |
 | 4. Verify | `python verify_x.py` | four tiers of real numbers | all pass, numbers from real runs |
 | 5. Write-up + self-check | `python tools/check_solution.py <md>` | `RoundN题解.md` | 17/17 checks |
-| 6. Re-verify + archive | `md_full.py` → `archive_check.py RoundN` | library records / indexes / status table | **exit code 0** |
+| 6. Re-verify + archive | `python tools/md_full.py <md> <letter>` → `archive_check.py RoundN` | library records / indexes / status table | **exit code 0** |
 
 <img src="docs/demo-gates.gif" width="900" alt="Recorded run of check_solution.py: 17 checks, all clear">
 
-Layout of one self-contained round:
+One round, one self-contained folder:
 
 ```
 <data-root>\
-├── 题解\牛客周赛\RoundN\        <- in demo: Round163 (full) + Round161 (C~E mini round)
+├── 题解\牛客周赛\RoundN\
 │   ├── RoundN题解.md            <- the deliverable editorial
 │   ├── <range>\<letter>\        <- per problem: solution + brute + verify driver (+ viz scripts)
 │   └── _work\                   <- disposables (statements/samples), regenerable
@@ -116,32 +175,9 @@ Layout of one self-contained round:
 └── 题解\题目状态.md              <- upsolve status table
 ```
 
-### Use your own data root
+## Solution packs: export / import
 
-```bash
-python install.py --new-data D:\my-cp       # scaffold: folders + template + empty index/status table
-python install.py --data-root D:\my-cp      # point config.json at it
-```
-
-### The upsolve status tracker
-
-```bash
-python tools/status_report.py    # today's queue: to-rewrite / to-upsolve / D+7 review / D+30 spot check
-python tools/status_gui.py       # Tkinter GUI
-```
-
-GUI keys: `1`-`6` set state ｜ `Enter` popup ｜ `Ctrl+Z` undo ｜ `Shift+Enter` open the original problem ｜ `F11` fullscreen ｜ `↓` in the search box opens the filter panel (knowledge / difficulty / status). Only the target row is touched; every write is backed up first.
-
-Modifying the UI? The standard name of every part (first row / filter panel / pick-pack dialog / report dialog…) is documented in [docs/status_gui-布局说明.md](docs/status_gui-布局说明.md) — name the part and state the change.
-
-<img src="docs/demo-gui.gif" width="900" alt="Recorded run of status_gui.py: number keys change the state, Ctrl+Z undoes, the problem page and the archive record open">
-
-## Sharing solutions: export / import a solution pack
-
-A solution pack is a portable bundle of one round's editorials plus its archive records.
-Run the six steps with your agent, export with one command; whoever downloads it imports it
-with one command into their own data root — indexes, status table and the "already taught"
-ledger all follow automatically.
+A solution pack is a portable bundle of one round's editorials plus its archive records; pack files round-trip byte-for-byte (`selfcheck_import.py` is the gate that proves it).
 
 ```bash
 python tools/export_solution.py Round163              # -> 牛客周赛Round163.zip
@@ -151,64 +187,22 @@ python tools/import_solution.py 牛客周赛Round163.zip          # validate onl
 python tools/import_solution.py 牛客周赛Round163.zip --apply  # write + wire up + reconcile
 ```
 
-What `--apply` chains: copy files → back-index rows → editorial pointers → status table rows
-(new problems default to "not done") → generated index sections → knowledge column →
-**`archive_check.py` exit code 0**. Exit code 0 is the finish line — "the files were copied"
-is not.
+What `--apply` chains: copy files → back-index rows → editorial pointers → status table rows (new problems default to "not done") → generated index sections → knowledge column → **`archive_check.py` exit code 0**. Exit code 0 is the finish line — "the files were copied" is not.
 
-Two rules worth calling out:
+Two rules worth calling out: **knowledge-point names have a single dictionary** (`knowledge\15-知识点词典.md`) — the same concept written two ways (`状态压缩DP` ≡ `状压 DP`) is normalized on both export and import, so the index never splits one concept into two columns; and **unknown names are accepted, not rejected** — only hard failures bounce (missing fields, unparseable file names, format-gate failures, overwriting existing files), while an unregistered name is written as-is and listed in a "to-register" report.
 
-- **Knowledge-point names have a single dictionary** (`knowledge\15-知识点词典.md`: 42 canonical
-  names / 35 archive folders / an alias table). The same concept written two ways
-  (`状态压缩DP` ≡ `状压 DP`) is normalized on both export and import, so the index never
-  splits one concept into two columns.
-- **Unknown names are accepted, not rejected.** Only hard failures bounce (missing manifest
-  fields, unparseable file names, format-gate failures, overwriting existing files). A name the
-  dictionary doesn't know is written to disk **as-is** and listed in a "to-register" report
-  (with the closest canonical-name suggestions) for the maintainer to merge later — an uploader
-  is never turned away because a name didn't line up.
-
-Packs round-trip byte-for-byte; `python tools/selfcheck_import.py` is the gate that proves it
-(export → import into an empty data root → per-file sha256 + reconciliation exit code 0, plus a
-second case covering the "unknown names are accepted" rule).
-
-### Prefer not to touch the CLI: three entries in the GUI
-
-The `status_gui.py` menu has **Import pack… / Export pack… / Validate…** — pick a pack, get a
-report, and only "apply to data root" actually writes. The GUI can be frozen into a single-file
-exe ([docs/打包图形端exe.md](docs/打包图形端exe.md)); it shares the very same code and argv as the
-CLI (`TimuZhuangtai.exe --pack-check pack.zip` works too).
-
-To **contribute a round back to this repo**, see [CONTRIBUTING.md](CONTRIBUTING.md): drop the
-exported pack into `contributions\` and open a PR — CI validates each pack before a human looks
-at it. Accepted packs are imported into `题库\` (the release data root, same layout as `demo\`).
-
-## Hang the format gate on your own repo (GitHub Action)
-
-The same 17-check gate ships as a GitHub Action — one `uses:` line in **your** repo's CI,
-and a failing editorial turns the job red:
-
-```yaml
-- uses: actions/checkout@v4
-- uses: 3097729287/acm-agent-workflow@main
-  with:
-    path: 'editorials/**/*.md'   # you say which markdown files are editorials
-```
-
-Your repo does not have to look like this one. Inputs, exit codes, and graceful degradation
-(no g++ / no katex degrades honestly instead of false-reporting) are documented in
-[docs/格式闸Action.md](docs/格式闸Action.md) (Chinese), along with how to dry-run it locally.
+Prefer not to touch the CLI: the GUI menu has **Import pack… / Export pack… / Validate…** — pick a pack, get a report, and only "apply to data root" actually writes.
 
 ## Tools
 
 | Script | Purpose |
 |---|---|
 | `install.py` | Setup: config.json / env check / scaffold a new data root |
-| `fetch_problem.py` | Fetch statements + sample tables through a **site-adapter table**: NowCoder (whole round, auto-detects round number) / Luogu (whole round or a single problem); `--selftest` replays the parsing chain offline |
+| `fetch_problem.py` | Fetch statements + sample tables: NowCoder (whole round, auto-detects the round number) / Luogu (whole round or a single problem); `--selftest` replays the parsing chain offline |
 | `new_round.py` | New-round skeleton (folders + markdown shell; idempotent, never overwrites) |
-| `verify.py` | Four-tier verification driver |
+| `verify.py` | Four-tier verification driver: compile → samples → edge cases → stress test → time limits |
 | `md_full.py` | Pre-delivery re-verification of the code **as pasted in the editorial** |
-| `check_solution.py` | 17-check format gate for the editorial |
+| `check_solution.py` | The 17-check format gate for the editorial (line number + offending sentence per complaint) |
 | `archive_check.py` | Archive reconciliation, **exit 0 = done** |
 | `index_sync.py` | Generates index tables from record files (single source of truth) |
 | `status_report.py` / `status_gui.py` / `fill_knowledge.py` | Status-table trio (report + filtering / GUI / knowledge column) |
@@ -219,14 +213,11 @@ Your repo does not have to look like this one. Inputs, exit codes, and graceful 
 | `check_contributions.py` | Validates every pack in `contributions\` inside a throwaway data root (runs in CI) |
 | `skills/check-solution` | Editorial QA skill: packages the 17-check format gate as "clone and use" |
 | `vizgrid.py` | Terminal character-art engine for algorithm diagrams |
-| `unify_latex.py` / `unpair_ticks.py` / `extract_math.py` + `katex_check.js` | LaTeX trio (convert / clean / render-check) |
-| `check_lost_by_hash.py` | Content-hash reconciliation after file moves |
+| `unify_latex.py` / `unpair_ticks.py` / `unpair_ticks_relaxed.py` / `extract_math.py` + `katex_check.js` | LaTeX tooling (convert / strip backticks / render-check) |
+| `check_lost_by_hash.py` | Content-hash reconciliation after file moves (comparing by filename lies) |
+| `lfcheck.py` | Line-ending / BOM normalization check |
 
 Full reference (design trade-offs and traps): [knowledge/10-工具链.md](knowledge/10-工具链.md) (Chinese).
-
-## Knowledge base (`knowledge\`, 16 docs, Chinese)
-
-Covers the pipeline definition, editorial format + LaTeX rules, the verification protocol, archiving + the cross-round "already taught" ledger, runnable character-art diagrams, from-scratch explanation rules, a falsified verification-log post-mortem, an algorithm pitfall collection, environment setup, NowCoder and Luogu scraping notes (including how to treat prompt-injection text found in statements), and the knowledge-point dictionary (the single source of truth for concept names).
 
 ## Configuration (config.json)
 
@@ -238,37 +229,60 @@ Covers the pipeline definition, editorial format + LaTeX rules, the verification
 }
 ```
 
-No hard-coded paths: set `AGENT_CP_TOOLS` / `AGENT_CP_CONFIG` to relocate the toolchain or config.
+No hard-coded paths: set `AGENT_CP_TOOLS` / `AGENT_CP_CONFIG` to relocate the toolchain or the config.
+
+## Knowledge base
+
+`knowledge\` holds the rule details (16 documents, Chinese); the root `AGENTS.md` keeps only the trunk and the agent reads details on demand.
+
+Covers the pipeline definition, editorial format + LaTeX rules, the verification protocol, archiving + the cross-round "already taught" ledger, runnable character-art diagrams, from-scratch explanation rules, a falsified verification-log post-mortem, an algorithm pitfall collection, environment setup, NowCoder and Luogu scraping notes (including how to treat prompt-injection text found in statements), and the knowledge-point dictionary (the single source of truth for concept names).
+
+## Platforms and CI
+
+The core pipeline is CI-green on three platforms (Ubuntu / macOS / Windows × Python 3.9 / 3.13): env check, sample gates, index sync, dictionary self-test and scraping self-test run on all six cells; four-tier re-verification, the 17-check format gate (with KaTeX rendering), the counter-example assertion and the Action entry's three exit codes run on Linux + 3.13; solution-pack round-trip and contribution validation run on Linux / Windows + 3.13.
+
+The Tkinter GUI and some `.cmd` helpers are Windows-oriented; on Linux, install `python3-tk` if the GUI complains about tkinter. All paths come from config.
 
 ## FAQ
 
 **Do I need Claude Code?** No — any agent that can read files and run commands works (Codex / Cursor / your own). `AGENTS.md` is written for them. Humans can follow the six steps manually too.
 
-**No g++ / node?** Fine. Without g++ the verification tiers are honestly reported as "unverified"; node only powers the KaTeX render check (that item reports "N/A").
+**No g++ / node?** Fine. Without g++ the verification tiers are honestly reported as "unverified"; node only powers the KaTeX render check (that item reports "N/A"). Install: `cd tools && npm install katex` (optional).
 
-**Non-Windows?** The core pipeline is CI-green on Ubuntu / macOS / Windows × Python 3.9 / 3.13 (badge above): env check, demo gate, index sync, four-tier re-verification and the 17-check format gate all run on Linux/macOS. The Tkinter GUI and some `.cmd` helpers are Windows-oriented. All paths come from config.
-
-**KaTeX render check:** `cd tools && npm install katex` (optional).
+**Is my data uploaded anywhere?** No. The data root lives on your machine and the repo only ships the sample. Network access happens only when fetching statements (NowCoder / Luogu) and in the optional KaTeX rendering.
 
 ## Design principles
 
-1. **Machine gates over pep talks** — every key claim maps to an exit code.
+1. **Machine gates over pep talks** — every key claim maps to an exit code; "I'm pretty sure it's fine" is not a result.
 2. **Never fabricate conclusions** — logs come from real runs; unrun tiers say "unverified".
 3. **Single source of truth** — index tables are generated from record files, never hand-edited.
 4. **Keep the evidence** — post-mortems and traps are archived, not forgotten.
 5. **Disposables vs. assets** — build artifacts are trash; `.cpp` / `.py` / `.md` are deleted only when their owner says so.
 
-## Bundled example
+## Repository layout
 
-`demo\` holds two rounds: NowCoder Weekly 163, problems B–G (a complete round — editorial, per-problem code, verify drivers where B shows the framework-style `verify_b.py` and F is a self-contained script), and Round 161's C–E (a mini round whose three problems all use framework-style drivers). Together: nine archive records, indexes, status table. Both `install.py --check` and `archive_check.py Round163` / `Round161` run against it.
+```
+acm-agent-workflow\
+├── AGENTS.md            <- rule trunk for AI agents (11 iron rules)
+├── README.md / README.en.md
+├── CONTRIBUTING.md      <- how to contribute a round's editorial (three routes / pack format)
+├── install.py           <- installer (config.json / env check / new data root)
+├── config.example.json
+├── knowledge\           <- rule details (16 docs)
+├── tools\               <- every script
+├── templates\           <- verify-driver template
+├── skills\              <- check-solution: the editorial QC gate (copy into ~/.claude/skills/)
+├── docs\                <- format-gate Action / exe packaging / GUI layout names + the docs site
+├── contributions\       <- contribution inbox (drop a pack, open a PR, CI validates)
+├── 题库\                <- the release data root (same layout as demo\)
+├── examples\            <- runnable counter-example (deliberately broken editorial) + Luogu scraping fixtures
+└── demo\                <- bundled sample data (Round 163 full + Round 161 C~E)
+```
 
-The second round is not padding: it demonstrates the **cross-round ledger** — once a second round lands in the same algorithm folders, 《已讲过概念清单》 must register newly taught concepts with "first appearance = the earliest round" and strike the entries that were finally taught (`knowledge\09-已讲过概念清单.md` shows the real wording).
+## Contact and contributions
 
-A deliberately broken counterpart ships in `examples\`: the same format gate flags it with eight red items and exit code 1 — run it once and you can see exactly what the gate catches. `examples\luogu\` is a different kind of fixture: the raw responses and rendered artifacts of a real Luogu fetch, replayed offline by `fetch_problem.py --selftest`.
-
-## Contributing
-
-Issues and PRs welcome; to contribute your own editorial, see [CONTRIBUTING.md](CONTRIBUTING.md) (drop the exported pack into `contributions\` and open a PR — CI validates it for the maintainer first). Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest`, `selfcheck_filter.py`, `selfcheck_import.py`, `check_contributions.py`, `knowledge_dict.py selftest` and `fetch_problem.py --selftest` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
+- **QQ: 3660535264** (note "题解投稿") — the easiest way to send an editorial: drop the zip produced by `export_solution.py` into the chat. Can't export? Send the markdown and source files as they are and the maintainer will pack them. Questions, bug reports and suggestions are welcome too.
+- Prefer not to add QQ? [Issues](https://github.com/3097729287/acm-agent-workflow/issues) / PRs work as always.
 
 ## License
 

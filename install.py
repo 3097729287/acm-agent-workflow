@@ -75,7 +75,7 @@ def check(args):
     print("== 环境体检 ==")
     v = sys.version_info
     print("  Python      %d.%d.%d  %s" % (v.major, v.minor, v.micro,
-          "OK" if v >= (3, 8) else "★ 需要 3.8+"))
+          "OK" if v >= (3, 9) else "★ 需要 3.9+"))
     rc, first = run(["g++", "--version"])
     print("  g++         %s  %s" % (first or "没找到", "OK" if rc == 0 else "（可选：没有它只能跳过编译/对拍档）"))
     rc, first = run(["node", "--version"])
