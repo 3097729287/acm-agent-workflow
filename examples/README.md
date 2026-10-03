@@ -64,9 +64,29 @@ python tools/check_solution.py examples/反例题解.md
 python tools/check_solution.py demo/题解/牛客周赛/Round163/Round163题解.md   # 退出码 0
 ```
 
+## luogu/：抓取解析的离线回归
+
+`examples/luogu/` 是另一类例子：**抓题面工具的原始返回 + 落盘产物**，用来做不联网的回归。
+
+| 目录 | 是什么 |
+|---|---|
+| `luogu/contest-278842/` | 洛谷**已结束**的一场官方比赛的整场抓取（原始 JSON / 题面 / `samples.py` / `题单.md`） |
+| `luogu/problem-P1001/` | 单题 URL 那条路的抓取 |
+
+```bash
+python tools/fetch_problem.py --selftest     # 拿原始返回重跑解析链，与落盘产物逐字比对；退出码 0 = 没漂
+```
+
+CI 每个矩阵格都跑这一步——抓题面的解析链改动后，不用联网也能知道产物会不会变形。
+
 ## English
 
 `反例题解.md` ("counter-example editorial") is deliberately broken. Running the 17-check
 format gate on it fails with **exit code 1** and eight red items; the table above maps each
 planted flaw to the check that catches it, and the output block is from a real run (local
 temporary paths trimmed). The bundled demo editorial passes the same gate with exit code 0.
+
+`luogu/` holds the raw responses and rendered artifacts of a real Luogu fetch (one whole
+ended contest + one single problem), used by `tools/fetch_problem.py --selftest` as an
+offline regression: it replays the parsing chain and byte-compares the artifacts. CI runs it
+on every matrix cell.

@@ -89,13 +89,13 @@ python demo/题解/牛客周赛/Round161/A-F/C/verify_c.py
 
 > 读仓库根目录的 AGENTS.md，然后处理这个比赛：`https://ac.nowcoder.com/acm/contest/<比赛号>`
 
-`AGENTS.md` 是规则的**主干**（11 条铁律 + 索引表），明细全在 `knowledge\`（15 篇），agent 按需取用。
+`AGENTS.md` 是规则的**主干**（11 条铁律 + 索引表），明细全在 `knowledge\`（16 篇），agent 按需取用。
 
 ### 六步流水线
 
 | 步骤 | 命令（agent 自己会跑） | 产出 | 闸门 |
 |---|---|---|---|
-| ① 抓题面 | `python tools/fetch_problem.py <URL>` | `RoundN\_work\` 下的题面 / 样例常量表 + 难度分档建议 | 抓取数 == 题目数 |
+| ① 抓题面 | `python tools/fetch_problem.py <URL>`（牛客 / 洛谷都认） | `RoundN\_work\` 下的题面 / 样例常量表 + 难度分档建议 | 抓取数 == 题目数 |
 | ② 定档 | （agent 查《已讲过概念清单》+ 分档表） | 每题讲什么、讲多深 | — |
 | ③ 写代码 | 每题一个目录 `RoundN\<区间>\<字母>\` | `x.cpp` + `x_brute.cpp` + `verify_x.py` | — |
 | ④ 验证 | `python verify_x.py` | 四档实测数字 | 全过且数字来自实跑 |
@@ -128,8 +128,13 @@ python install.py --data-root D:\my-cp      # 让 config.json 指过去
 
 ```bash
 python tools/status_report.py    # 今天的队列：①待重写 ②待补题 ③D+7 复习 ④D+30 抽检
+python tools/status_report.py --todo --knowledge DP          # 换个问法：还没做出来的 DP 题
+python tools/status_report.py --status 未做,不会 --difficulty 1200-1600
 python tools/status_gui.py       # 图形端（Tkinter）
 ```
+
+筛选（`--knowledge` / `--status` / `--difficulty`，三条 AND）= 命令行的「筛出 N 题」清单，
+图形端筛选区**引的是同一份实现** —— 两边同条件必然同一份结果。
 
 图形端键位：`1`~`6` 直接改状态 ｜ `Enter` 浮层 ｜ `Ctrl+Z` 连撤 ｜ `Shift+Enter` 开原题 ｜ `F11` 全屏。只动目标行、写前自动备份、非法状态拒写。
 
@@ -165,29 +170,43 @@ python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串
 包内文件逐字节可往返（`python tools/selfcheck_import.py` 就是验这个：导出 → 导入空数据根 →
 逐文件 sha256 比对 + 对账退出码 0；另有一项专门验「未登记名字照收」）。
 
+### 不碰命令行的话：图形端三个入口
+
+`status_gui.py` 菜单「题解包」= **导入题解包… / 导出题解包… / 一键校验…** ——
+选包 → 后台出报告 → 点「应用到数据根」才真落盘。图形端可以打包成单文件 exe
+（[docs/打包图形端exe.md](docs/打包图形端exe.md)），它与命令行**同一份代码、同一套 argv**
+（`TimuZhuangtai.exe --pack-check 包.zip` 也能跑）。
+
+想把自己的一场题解**投给这个仓库**：见 [CONTRIBUTING.md](CONTRIBUTING.md) ——
+把导出的包放进 `contributions\` 提 PR，CI 会替维护者把每个包先校验一遍；
+收下的包导进 `题库\`（发布用的数据根，结构与 `demo\` 一样），投递箱随之清空。
+
 ## 工具清单
 
 | 脚本 | 干什么 |
 |---|---|
 | `install.py` | 安装助手：config.json / 环境体检 / 建新数据根 |
-| `fetch_problem.py` | 抓牛客比赛题面 + 样例常量表（自动认场次号） |
+| `fetch_problem.py` | 抓题面 + 样例常量表（**站点适配表**）：牛客整场（自动认场次号）/ 洛谷整场或单题；`--selftest` 离线复跑解析链 |
 | `new_round.py` | 新场次起手骨架（目录 + md 空壳，幂等不覆盖） |
 | `verify.py` | 四档验证驱动：编译 → 样例 → 边界 → 对拍 → 极限 |
 | `md_full.py` | 交付前复验：抽 **md 里贴着的那份代码** 四档全跑 |
 | `check_solution.py` | 题解 md 的 17 项格式闸门（每项带行号原句） |
 | `archive_check.py` | 归档对账，**退出码 0 = 归档完成** |
 | `index_sync.py` | 索引两表自动生成（记录 md 是单一事实来源） |
-| `status_report.py` / `status_gui.py` / `fill_knowledge.py` | 状态表三件套（报告 / 图形端 / 知识点列） |
+| `status_report.py` / `status_gui.py` / `fill_knowledge.py` | 状态表三件套（报告 + 筛选 / 图形端 / 知识点列） |
+| `selfcheck_filter.py` | 筛选逻辑的机器闸门（28 组单元断言 + 20 组命令行端到端命中集合） |
 | `export_solution.py` / `import_solution.py` | **题解包**：导出一场（或一题）给别人 / 收下别人的包（见下节） |
 | `knowledge_dict.py` | 知识点词典的解析与查询（标准名 / 别名 / 未登记建议） |
 | `selfcheck_import.py` | 导入导出的机器闸门（往返无损 + 未登记照收） |
+| `check_contributions.py` | 投稿包校验：`contributions\` 里每个包在临时空数据根里 `import --dry` 一遍（CI 跑） |
+| `skills/check-solution` | 题解质检 skill：把 17 项格式闸包成「clone 下来就能用」（见该目录 README） |
 | `vizgrid.py` | 终端字符画引擎（讲数据结构配「可跑的图」） |
 | `unify_latex.py` / `unpair_ticks.py` / `extract_math.py` + `katex_check.js` | LaTeX 三件套（转换 / 去灰底 / KaTeX 真渲染） |
 | `check_lost_by_hash.py` | 搬目录后的内容哈希对账 |
 
 完整参考（每个脚本的设计取舍与坑）：[knowledge/10-工具链.md](knowledge/10-工具链.md)。
 
-## 知识库（knowledge\，15 篇）
+## 知识库（knowledge\，16 篇）
 
 | 篇 | 内容 |
 |---|---|
@@ -197,7 +216,7 @@ python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串
 | 06-题解算法归档 / 09-已讲过概念清单 | 归档四处一起更新；跨场次「讲没讲过」台账 |
 | 07-配图 / 08-从零讲 | 可跑的终端字符画；新概念从零讲的四段式 |
 | 11-反面教材 | 已证伪的「实测记录」原文（不许生成结论的实据） |
-| 12-算法坑集 / 13-环境准备 / 14-牛客抓取 | 实现坑合集；工具链安装；牛客页面结构 |
+| 12-算法坑集 / 13-环境准备 / 14-牛客抓取 / 16-洛谷抓取 | 实现坑合集；工具链安装；两个站的页面结构与抓取配方（含题面里的提示注入怎么处理） |
 | 15-知识点词典 | **知识点名字的唯一出处**：标准名 / 文件夹 / 别名 / 已定稿写法 |
 | 01-学习偏好 / 10-工具链 | 讲解风格约定；全部脚本的参考页 |
 
@@ -237,7 +256,7 @@ python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串
 
 第二场不只是凑数：它演示**跨场次台账**怎么落——同一批算法文件夹里进来第二场的记录后，《已讲过概念清单》要按「首次出现取最早那场」登记新从零讲的概念，并把「还没讲过」表里被讲掉的那条划掉（`knowledge\09-已讲过概念清单.md` 里能看到真实写法）。
 
-另配一份**故意做坏的反例**（`examples\`）：同一把格式闸跑上去当场报 8 项红、退出码 1——闸门到底拦得住什么，跑一次就看见。
+另配一份**故意做坏的反例**（`examples\`）：同一把格式闸跑上去当场报 8 项红、退出码 1——闸门到底拦得住什么，跑一次就看见。`examples\luogu\` 是另一类：抓题面工具的**原始返回 + 落盘产物**，给 `fetch_problem.py --selftest` 做不联网的逐字回归。
 
 ## 目录结构
 
@@ -246,18 +265,23 @@ acm-agent-workflow\
 ├── AGENTS.md            ← 给 AI agent 的规则主干（11 条铁律）
 ├── README.md / README.en.md
 ├── LICENSE（MIT）
+├── CONTRIBUTING.md      ← 怎么投稿一场自己的题解（两条路径 / 包格式）
 ├── install.py           ← 安装助手
 ├── config.example.json
-├── knowledge\           ← 知识库明细（15 篇）
+├── knowledge\           ← 知识库明细（16 篇）
 ├── tools\               ← 全部脚本
 ├── templates\           ← verify 驱动模板
-├── examples\            ← 可跑反例（故意做坏的题解，闸门当场报红）
+├── skills\              ← 技能包（check-solution：题解质检闸，复制到 ~/.claude/skills/ 即用）
+├── docs\                ← 打包图形端 exe 等说明
+├── contributions\       ← 投稿投递箱（放进包提 PR，CI 自动校验）
+├── 题库\                ← 发布用的数据根骨架（结构同 demo\）
+├── examples\            ← 可跑反例（故意做坏的题解，闸门当场报红）+ 洛谷抓取回归 fixture
 └── demo\                ← 自带示例数据（Round 163 全场 + Round 161 的 C~E）
 ```
 
 ## 贡献
 
-Issue / PR 欢迎。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_unpair.py`、`selfcheck_import.py`、`knowledge_dict.py selftest` 是现成的回归）。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑（不带参数）就是执行验证。
+Issue / PR 欢迎；想投稿自己的题解，见 [CONTRIBUTING.md](CONTRIBUTING.md)（把导出的包放进 `contributions\` 提 PR，CI 会先替你把包校验一遍）。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_filter.py`、`selfcheck_import.py`、`check_contributions.py`、`knowledge_dict.py selftest`、`fetch_problem.py --selftest` 是现成的回归）。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑（不带参数）就是执行验证。
 
 ## License
 

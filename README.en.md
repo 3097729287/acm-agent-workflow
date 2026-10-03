@@ -88,7 +88,7 @@ Open this repo in Claude Code (or any agent) and say:
 
 > Read AGENTS.md at the repo root, then process this contest: `https://ac.nowcoder.com/acm/contest/<id>`
 
-`AGENTS.md` is the rule backbone (11 laws + an index table); details live in `knowledge\` (15 docs, in Chinese) and are read on demand.
+`AGENTS.md` is the rule backbone (11 laws + an index table); details live in `knowledge\` (16 docs, in Chinese) and are read on demand.
 
 ### The six-step pipeline
 
@@ -170,31 +170,45 @@ Packs round-trip byte-for-byte; `python tools/selfcheck_import.py` is the gate t
 (export → import into an empty data root → per-file sha256 + reconciliation exit code 0, plus a
 second case covering the "unknown names are accepted" rule).
 
+### Prefer not to touch the CLI: three entries in the GUI
+
+The `status_gui.py` menu has **Import pack… / Export pack… / Validate…** — pick a pack, get a
+report, and only "apply to data root" actually writes. The GUI can be frozen into a single-file
+exe ([docs/打包图形端exe.md](docs/打包图形端exe.md)); it shares the very same code and argv as the
+CLI (`TimuZhuangtai.exe --pack-check pack.zip` works too).
+
+To **contribute a round back to this repo**, see [CONTRIBUTING.md](CONTRIBUTING.md): drop the
+exported pack into `contributions\` and open a PR — CI validates each pack before a human looks
+at it. Accepted packs are imported into `题库\` (the release data root, same layout as `demo\`).
+
 ## Tools
 
 | Script | Purpose |
 |---|---|
 | `install.py` | Setup: config.json / env check / scaffold a new data root |
-| `fetch_problem.py` | Fetch NowCoder statements + sample tables (auto-detects round number) |
+| `fetch_problem.py` | Fetch statements + sample tables through a **site-adapter table**: NowCoder (whole round, auto-detects round number) / Luogu (whole round or a single problem); `--selftest` replays the parsing chain offline |
 | `new_round.py` | New-round skeleton (folders + markdown shell; idempotent, never overwrites) |
 | `verify.py` | Four-tier verification driver |
 | `md_full.py` | Pre-delivery re-verification of the code **as pasted in the editorial** |
 | `check_solution.py` | 17-check format gate for the editorial |
 | `archive_check.py` | Archive reconciliation, **exit 0 = done** |
 | `index_sync.py` | Generates index tables from record files (single source of truth) |
-| `status_report.py` / `status_gui.py` / `fill_knowledge.py` | Status-table trio (report / GUI / knowledge column) |
+| `status_report.py` / `status_gui.py` / `fill_knowledge.py` | Status-table trio (report + filtering / GUI / knowledge column) |
+| `selfcheck_filter.py` | Machine gate for the filter logic (28 unit assertions + 20 end-to-end result-set comparisons) |
 | `export_solution.py` / `import_solution.py` | Solution packs: export a round (or one problem) / import someone else's |
 | `knowledge_dict.py` | Knowledge-point dictionary: canonical names, aliases, suggestions |
 | `selfcheck_import.py` | Gate for import/export (round-trip losslessness + unknown names accepted) |
+| `check_contributions.py` | Validates every pack in `contributions\` inside a throwaway data root (runs in CI) |
+| `skills/check-solution` | Editorial QA skill: packages the 17-check format gate as "clone and use" |
 | `vizgrid.py` | Terminal character-art engine for algorithm diagrams |
 | `unify_latex.py` / `unpair_ticks.py` / `extract_math.py` + `katex_check.js` | LaTeX trio (convert / clean / render-check) |
 | `check_lost_by_hash.py` | Content-hash reconciliation after file moves |
 
 Full reference (design trade-offs and traps): [knowledge/10-工具链.md](knowledge/10-工具链.md) (Chinese).
 
-## Knowledge base (`knowledge\`, 15 docs, Chinese)
+## Knowledge base (`knowledge\`, 16 docs, Chinese)
 
-Covers the pipeline definition, editorial format + LaTeX rules, the verification protocol, archiving + the cross-round "already taught" ledger, runnable character-art diagrams, from-scratch explanation rules, a falsified verification-log post-mortem, an algorithm pitfall collection, environment setup, NowCoder scraping notes, and the knowledge-point dictionary (the single source of truth for concept names).
+Covers the pipeline definition, editorial format + LaTeX rules, the verification protocol, archiving + the cross-round "already taught" ledger, runnable character-art diagrams, from-scratch explanation rules, a falsified verification-log post-mortem, an algorithm pitfall collection, environment setup, NowCoder and Luogu scraping notes (including how to treat prompt-injection text found in statements), and the knowledge-point dictionary (the single source of truth for concept names).
 
 ## Configuration (config.json)
 
@@ -232,11 +246,11 @@ No hard-coded paths: set `AGENT_CP_TOOLS` / `AGENT_CP_CONFIG` to relocate the to
 
 The second round is not padding: it demonstrates the **cross-round ledger** — once a second round lands in the same algorithm folders, 《已讲过概念清单》 must register newly taught concepts with "first appearance = the earliest round" and strike the entries that were finally taught (`knowledge\09-已讲过概念清单.md` shows the real wording).
 
-A deliberately broken counterpart ships in `examples\`: the same format gate flags it with eight red items and exit code 1 — run it once and you can see exactly what the gate catches.
+A deliberately broken counterpart ships in `examples\`: the same format gate flags it with eight red items and exit code 1 — run it once and you can see exactly what the gate catches. `examples\luogu\` is a different kind of fixture: the raw responses and rendered artifacts of a real Luogu fetch, replayed offline by `fetch_problem.py --selftest`.
 
 ## Contributing
 
-Issues and PRs welcome. Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest`, `selfcheck_unpair.py`, `selfcheck_import.py` and `knowledge_dict.py selftest` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
+Issues and PRs welcome; to contribute your own editorial, see [CONTRIBUTING.md](CONTRIBUTING.md) (drop the exported pack into `contributions\` and open a PR — CI validates it for the maintainer first). Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest`, `selfcheck_filter.py`, `selfcheck_import.py`, `check_contributions.py`, `knowledge_dict.py selftest` and `fetch_problem.py --selftest` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
 
 ## License
 
