@@ -27,6 +27,15 @@ This repo hands the whole workflow to an **AI agent** (Claude Code / Codex / any
 - **Forgetting your upsolve queue?** Every non-trivial problem lands in `题目状态.md` with a six-state lifecycle; `status_report.py` prints today's queue and a Tkinter GUI edits states with one keypress.
 - **Losing files while reorganizing?** Content-hash reconciliation tooling — comparing by filename lies when same-named files overwrite each other.
 
+## Track record
+
+This isn't a slide deck — it's the author's daily pipeline (as of 2026-10-03):
+
+- **9 NowCoder weekly rounds** (Round 123–163) processed through the full six steps; Round 163 ships verbatim in this repo's `demo\`;
+- **43 problems** moving through the upsolve status table (can't → to-rewrite → reproduced-AC → solved-independently → consolidated);
+- **32** four-tier verification drivers, re-runnable with the code;
+- **57 archive records** across **31 algorithm folders**.
+
 ## Quick start (5 minutes)
 
 ```bash
@@ -48,6 +57,8 @@ The check prints Python / g++ / node status and then runs the demo gate — `arc
 
 (Script output is Chinese — the project is CN-first. g++ and node are optional: without g++ the verification tiers are honestly reported as "unverified"; node only powers the KaTeX math render check.)
 
+<img src="docs/demo-install.gif" width="900" alt="Recorded run of python install.py --check: env check + demo gate, exit code 0">
+
 Then run a full four-tier verification on the bundled example (a complete round from NowCoder Weekly Contest 163):
 
 ```bash
@@ -63,6 +74,8 @@ python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
 ```
 
 Tier names: compile / samples / edge cases / stress test / time limits — all PASS. (Output above is verbatim from a real run; timings vary by machine.)
+
+<img src="docs/demo-verify.gif" width="900" alt="Recorded run of verify_b.py: compile / samples / edge / stress / limits — all PASS">
 
 ## Tutorial: run one full round
 
@@ -84,6 +97,8 @@ Open this repo in Claude Code (or any agent) and say:
 | 4. Verify | `python verify_x.py` | four tiers of real numbers | all pass, numbers from real runs |
 | 5. Write-up + self-check | `python tools/check_solution.py <md>` | `RoundN题解.md` | 17/17 checks |
 | 6. Re-verify + archive | `md_full.py` → `archive_check.py RoundN` | library records / indexes / status table | **exit code 0** |
+
+<img src="docs/demo-gates.gif" width="900" alt="Recorded run of check_solution.py: 17 checks, all clear">
 
 Layout of one self-contained round:
 
@@ -113,6 +128,8 @@ python tools/status_gui.py       # Tkinter GUI
 ```
 
 GUI keys: `1`-`6` set state ｜ `Enter` popup ｜ `Ctrl+Z` undo ｜ `Shift+Enter` open the original problem ｜ `F11` fullscreen. Only the target row is touched; every write is backed up first.
+
+<img src="docs/demo-gui.gif" width="900" alt="Recorded run of status_gui.py: number keys change the state, Ctrl+Z undoes, the problem page and the archive record open">
 
 ## Tools
 

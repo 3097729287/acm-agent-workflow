@@ -27,6 +27,15 @@
 - **补题队列记不住？** 每场非签到题自动进 `题目状态.md`，六态流转（不会/待重写/复现AC/独立AC/巩固/未做），`status_report.py` 排今天的队列，图形端一键改状态。
 - **搬目录丢文件？** 有内容哈希对账工具（按文件名比对会骗人——同名文件互相顶掉时「看着还在、其实在的是另一个」）。
 
+## 战绩
+
+这套流程不是演示稿，是一直在跑的日常流水线（截至 2026-10-03 的统计）：
+
+- **9 场牛客周赛**（Round 123 ~ 163）全程走六步，其中 Round 163 原样收进了本仓库 `demo\`；
+- **43 道题**在补题状态表里逐题流转（不会 → 待重写 → 复现 AC → 独立 AC → 巩固）；
+- **32 个**四档验证驱动随时代码可复跑；
+- 算法库归档 **57 份记录**、覆盖 **31 个算法文件夹**。
+
 ## 快速开始（5 分钟）
 
 ```bash
@@ -49,6 +58,8 @@ python install.py           # 生成 config.json（默认指向自带示例）+ 
 
 （g++ 与 node 都是可选的：没有 g++ 时验证档如实写「未验证」，node 只影响 KaTeX 公式渲染检查。）
 
+<img src="docs/demo-install.gif" width="900" alt="python install.py --check 实跑：环境体检三行 + 示例闸门退出码 0">
+
 然后亲手跑一遍四档验证（仓库里就带着一场完整示例：牛客周赛 Round 163）：
 
 ```bash
@@ -64,6 +75,8 @@ python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
 ```
 
 （上面的输出是逐字实测结果；秒数随机器的快慢浮动，以你自己机器上的实跑为准。）
+
+<img src="docs/demo-verify.gif" width="900" alt="verify_b.py 实跑：编译 / 样例 / 边界 / 对拍 / 极限五段全过">
 
 ## 使用教程：完整跑一场比赛
 
@@ -85,6 +98,8 @@ python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
 | ④ 验证 | `python verify_x.py` | 四档实测数字 | 全过且数字来自实跑 |
 | ⑤ 写题解 + 自检 | `python tools/check_solution.py <md>` | `RoundN题解.md` | 17 项全过 |
 | ⑥ 复验 + 归档 | `python tools/md_full.py <md> <字母>` → `archive_check.py RoundN` | 算法库记录 / 索引 / 状态表 | **退出码 0** |
+
+<img src="docs/demo-gates.gif" width="900" alt="check_solution.py 实跑：17 项逐条通过、结论 0 项有问题">
 
 一场一个自包含文件夹，落盘结构：
 
@@ -114,6 +129,8 @@ python tools/status_gui.py       # 图形端（Tkinter）
 ```
 
 图形端键位：`1`~`6` 直接改状态 ｜ `Enter` 浮层 ｜ `Ctrl+Z` 连撤 ｜ `Shift+Enter` 开原题 ｜ `F11` 全屏。只动目标行、写前自动备份、非法状态拒写。
+
+<img src="docs/demo-gui.gif" width="900" alt="status_gui.py 实跑：按数字键改状态 → Ctrl+Z 连撤 → 打开原题与归档记录">
 
 ## 工具清单
 
