@@ -173,6 +173,19 @@ v13（2026-10-03 批次 C）：
       同步收进两个新输入框（v8 规则不变：在表 / 清单上按键不弹输入法）。
     （v9 删的是「状态筛选下拉框」那一套；v13 不是把它搬回来：没有下拉、没有 `F` 键，
       也没有新的状态取值 —— 是输入框 + 多选按钮 + 与命令行共用一份匹配实现。）
+v13（2026-10-03 批次 B）：
+    **题解包三个文件级入口**（菜单栏「题解包」；只动菜单 / 入口区，不碰搜索筛选区）：
+      ① 导入题解包…：选 zip / 已解压的目录 → 后台跑 `import_solution` dry（不写盘）→
+         弹报告窗口；校验全过（退出码 0）才出现「应用到数据根」按钮，按了才真 `--apply`
+         （落盘后自动刷新本窗口的表格）。
+      ② 导出题解包…：选场次（状态表里「牛客周赛 Round N」形式）+ 可选题号 → 生成
+         题解包 zip（默认存桌面）。
+      ③ 一键校验…：同 ① 的 dry，但只出报告、不给落盘按钮。
+      任务跑在后台线程（界面不卡；同一时刻只允许一个包任务）。执行走**进程内调用**
+      （不是子进程）—— PyInstaller 打的 exe（frozen）里没有解释器可用，两种环境
+      统一这条路径（子齿轮由 `toolutil.run_sibling` 在 frozen 下同样进程内化）。
+      无窗口命令行版（CI / 自动化）：`--pack-import <包> [--apply]` /
+      `--pack-check <包>` / `--pack-export Round163[-G] [-o 出.zip] [--log 日志]`。
 
 记住上次（v4）：
     关窗时把 窗口大小 + 位置 + 排序字段 + 升/降序 存成脚本同目录的 `status_gui.config.json`
@@ -198,15 +211,18 @@ import hashlib
 import io
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
 import tempfile
+import threading
+import traceback
 
 sys.dont_write_bytecode = True          # 只读地 import 工具目录：绝不往那儿写 __pycache__
 
 import tkinter as tk
-from tkinter import ttk, font as tkfont, messagebox
+from tkinter import ttk, filedialog, font as tkfont, messagebox
 
 
 def _load_tool(name):
@@ -262,6 +278,61 @@ TOAST_MS = 3000                                 # 底部保存提示 3 秒后自
 UNDO_MAX = 50                                   # v12：Ctrl+Z 撤销栈容量（多步；只在内存、不跨重启）
 DATA_ROOT = toolutil.DATA_ROOT                      # v6 追加：资料查找的根（算法库记录 / 场题解），测试里可换沙箱
 
+
+# ================================================================ 题解包（v13）
+# 三入口（菜单「导入 / 导出 / 一键校验」）的纯逻辑都在这一节 —— 不开窗口、不碰磁盘，
+# selftest 直接断言；真正的执行在 StatusGui 的方法与 pack_cli()（无窗口命令行入口）里。
+PACK_MENU_LABEL = "题解包"
+PACK_IMPORT_LABEL = "导入题解包…"
+PACK_EXPORT_LABEL = "导出题解包…"
+PACK_CHECK_LABEL = "一键校验…"
+
+
+def pack_import_argv(pack, root, apply_=False):
+    """「导入题解包」→ import_solution.main 的参数列表（dry 或 --apply）。"""
+    argv = [pack]
+    if apply_:
+        argv.append("--apply")
+    argv += ["--root", root]
+    return argv
+
+
+def pack_export_argv(target, out, root):
+    """「导出题解包」→ export_solution.main 的参数列表；out 为空 = 用工具的默认命名。"""
+    argv = [target]
+    if out:
+        argv += ["-o", out]
+    argv += ["--root", root]
+    return argv
+
+
+def pack_verdict(rc, applied):
+    """导入跑完的（退出码, 是否 --apply）→（还能不能「应用到数据根」, 状态行文案）。"""
+    if rc == 0:
+        if applied:
+            return False, "导入完成 —— 文件 / 索引 / 状态表 / 台账四处都对上了"
+        return True, "校验通过 —— 可以应用到数据根"
+    if rc == 1:
+        return False, "包里有不合格项（看上面的「问题」清单），改完再来"
+    return False, "包不可读或参数不对（看上面的报错）"
+
+
+def pack_round_choices(rows):
+    """状态表行 → 可导出的场次列表（「牛客周赛 Round N」形式，按场次号降序）。
+
+    export_solution 目前只认牛客周赛（别的比赛等通用化批次），筛选口径跟它一致。
+    """
+    seen, out = set(), []
+    for r in rows:
+        s = r.get("场次", "")
+        name, _n = toolutil.parse_contest(s)
+        if name == "牛客周赛" and s not in seen:
+            seen.add(s)
+            out.append(s)
+    out.sort(key=round_num, reverse=True)
+    return out
+
+
 # 统一配色：浅底 + 一个强调色
 C_BG = "#f4f6fb"
 C_PANEL = "#ffffff"
@@ -308,8 +379,14 @@ DEFAULT_CFG = {"geometry": "", "sort_col": "场次", "sort_desc": False}
 
 
 def config_path_default():
-    """「记住上次」的配置文件 = 脚本同目录的 status_gui.config.json。"""
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_NAME)
+    """「记住上次」的配置文件 = 脚本同目录的 status_gui.config.json。
+
+    frozen（exe）下脚本在一个**一次性临时解包目录**里 —— 写那儿等于每次开窗都丢；
+    跟着 exe 走（`toolutil.REPO_ROOT` 在 frozen 下就是 exe 所在目录）。
+    """
+    d = (toolutil.REPO_ROOT if getattr(sys, "frozen", False)
+         else os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(d, CONFIG_NAME)
 
 
 def _geometry_ok(g, sw=None, sh=None):
@@ -884,6 +961,7 @@ class StatusGui(object):
         self._undo_stack = []                # v12：Ctrl+Z 撤销栈（多步；只在内存、不跨重启）
         self._last_change = None             # v6~v11：只记一步 → v12 起 = 栈顶那份（栈空即 None）
         self.last_windowed_geometry = None   # v11：进全屏前记下的窗口态 geometry（全屏中关窗存这份）
+        self._pack_job = None                # v13：正在跑的题解包后台任务（同时只许一个）
 
         root.title("题目状态跟踪表")
         root.geometry("1320x800")
@@ -892,6 +970,7 @@ class StatusGui(object):
         self.fam = self._pick_family()
         self._init_style()
 
+        self._make_menu()                   # v13：菜单栏（题解包：导入 / 导出 / 一键校验）
         self._make_head()                   # v9：第一行 = 搜索 + 统计 + 消息（页头两行 / 底部行都删了）
         self._make_filter_bar()             # v13：第二行 = 筛选区（知识点 / 状态 / 难度）
 
@@ -2163,6 +2242,335 @@ class StatusGui(object):
             self.nb.select(0)
         self.select_key(key, focus=True)
 
+    # ------------------------------------------------------------ 题解包（v13）
+    def _make_menu(self):
+        """菜单栏：`题解包` → 导入题解包… / 导出题解包… / ── / 一键校验…（v13 三入口）。
+
+        入口只在这里出现（不占快捷键 —— 键位表 KEY_TABLE 与说明 md 逐字同步，别动那两处）。
+        """
+        menubar = tk.Menu(self.root, tearoff=0)   # tearoff=0：菜单栏里别混进一条「撕下」项
+        m = tk.Menu(menubar, tearoff=0)
+        m.add_command(label=PACK_IMPORT_LABEL, command=lambda: self.pack_flow("import"))
+        m.add_command(label=PACK_EXPORT_LABEL, command=self.pack_export_dialog)
+        m.add_separator()
+        m.add_command(label=PACK_CHECK_LABEL, command=lambda: self.pack_flow("check"))
+        menubar.add_cascade(label=PACK_MENU_LABEL, menu=m)
+        self.root.config(menu=menubar)
+
+    def pack_flow(self, mode):
+        """「导入题解包…」/「一键校验…」：选包 → 后台 dry → 报告窗。
+
+        import 模式报告窗多一个「应用到数据根」按钮（dry 通过才亮）；check 模式只出报告。
+        """
+        if self._pack_job is not None:
+            self.set_msg("已有题解包任务在跑，等它结束", clear_after=TOAST_MS)
+            return
+        pack = self._ask_pack_path()
+        if not pack:
+            return
+        title = PACK_IMPORT_LABEL.rstrip("…") if mode == "import" else PACK_CHECK_LABEL.rstrip("…")
+        win, text, status, btn = self._open_pack_report(
+            title, "包：%s" % pack, allow_apply=(mode == "import"))
+        self._pack_report_append(text, "正在校验 %s ……\n" % pack)
+        self._start_pack_job(kind="import", pack=pack,
+                             argv=pack_import_argv(pack, self.data_root, False),
+                             win=win, text=text, status=status, btn=btn)
+
+    def _ask_pack_path(self):
+        """选包对话框（zip 或解压后的目录二选一）。返回路径；取消 = None。"""
+        win = tk.Toplevel(self.root)
+        win.title("选择题解包")
+        win.configure(bg=C_BG)
+        win.transient(self.root)
+        win.resizable(False, False)
+        var = tk.StringVar()
+        body = tk.Frame(win, bg=C_BG)
+        body.pack(fill="both", expand=True, padx=16, pady=(14, 4))
+        tk.Label(body, text="题解包（.zip 或解压后的目录）：", bg=C_BG, fg=C_TEXT,
+                 font=(self.fam, 13)).grid(row=0, column=0, columnspan=3, sticky="w")
+        ent = ttk.Entry(body, textvariable=var, width=48, font=(self.fam, 13))
+        ent.grid(row=1, column=0, columnspan=2, sticky="we", pady=(6, 0))
+
+        def pick(kind):
+            if kind == "zip":
+                p = filedialog.askopenfilename(parent=win, title="选择题解包（zip）",
+                                               filetypes=[("题解包", "*.zip"), ("全部文件", "*.*")])
+            else:
+                p = filedialog.askdirectory(parent=win, title="选择题解包（目录）")
+            if p:
+                var.set(os.path.normpath(p))
+
+        ttk.Button(body, text="选 zip…", command=lambda: pick("zip")).grid(
+            row=1, column=2, sticky="w", padx=(8, 0), pady=(6, 0))
+        ttk.Button(body, text="选目录…", command=lambda: pick("dir")).grid(
+            row=2, column=2, sticky="w", padx=(8, 0))
+        out = {"path": None}
+
+        def ok(*_e):
+            p = var.get().strip().strip('"')
+            if not p:
+                return
+            out["path"] = os.path.normpath(p)
+            win.destroy()
+
+        btns = tk.Frame(win, bg=C_BG)
+        btns.pack(fill="x", padx=16, pady=(8, 14))
+        ttk.Button(btns, text="开始", command=ok).pack(side="right")
+        ttk.Button(btns, text="取消", command=win.destroy).pack(side="right", padx=(0, 8))
+        ent.bind("<Return>", ok)
+        win.bind("<Escape>", lambda _e: win.destroy())
+        self._center_on_root(win)
+        ent.focus_set()
+        win.grab_set()
+        win.wait_window()
+        return out["path"]
+
+    def pack_export_dialog(self):
+        """「导出题解包…」：选场次（可选题号 = 单题包）→ 输出 zip → 后台导出，报告进报告窗。"""
+        if self._pack_job is not None:
+            self.set_msg("已有题解包任务在跑，等它结束", clear_after=TOAST_MS)
+            return
+        rounds = pack_round_choices(self.rows)
+        if not rounds:
+            self._error("导出题解包", "状态表里没有「牛客周赛 Round N」形式的场次。")
+            return
+        win = tk.Toplevel(self.root)
+        win.title(PACK_EXPORT_LABEL.rstrip("…"))
+        win.configure(bg=C_BG)
+        win.transient(self.root)
+        win.resizable(False, False)
+        body = tk.Frame(win, bg=C_BG)
+        body.pack(fill="both", expand=True, padx=16, pady=(14, 4))
+        tk.Label(body, text="场次", bg=C_BG, fg=C_TEXT, font=(self.fam, 13)).grid(row=0, column=0, sticky="w")
+        cb = ttk.Combobox(body, values=rounds, state="readonly", width=24, font=(self.fam, 13))
+        cb.set(rounds[0])
+        cb.grid(row=0, column=1, sticky="w", padx=(8, 16))
+        tk.Label(body, text="题号（空 = 整场）", bg=C_BG, fg=C_TEXT,
+                 font=(self.fam, 13)).grid(row=0, column=2, sticky="w")
+        ent_letter = ttk.Entry(body, width=6, font=(self.fam, 13))
+        ent_letter.grid(row=0, column=3, sticky="w", padx=(8, 0))
+        tk.Label(body, text="输出 zip", bg=C_BG, fg=C_TEXT,
+                 font=(self.fam, 13)).grid(row=1, column=0, sticky="w", pady=(10, 0))
+        var_out = tk.StringVar()
+        ent_out = ttk.Entry(body, textvariable=var_out, width=48, font=(self.fam, 13))
+        ent_out.grid(row=1, column=1, columnspan=3, sticky="we", padx=(8, 0), pady=(10, 0))
+
+        def default_out(*_e):
+            name, n = toolutil.parse_contest(cb.get())
+            if not name or not n:
+                return
+            letter = ent_letter.get().strip().upper()
+            var_out.set(os.path.join(os.path.expanduser("~"), "Desktop",
+                                     "%sRound%d%s.zip" % (name, n, ("-" + letter) if letter else "")))
+
+        def save_as():
+            p = filedialog.asksaveasfilename(parent=win, title="题解包另存为",
+                                             defaultextension=".zip",
+                                             initialfile=os.path.basename(var_out.get() or "pack.zip"),
+                                             filetypes=[("题解包", "*.zip")])
+            if p:
+                var_out.set(os.path.normpath(p))
+
+        ttk.Button(body, text="另存为…", command=save_as).grid(row=2, column=3, sticky="e", pady=(6, 0))
+        cb.bind("<<ComboboxSelected>>", default_out)
+        ent_letter.bind("<KeyRelease>", default_out)
+
+        def go(*_e):
+            name, n = toolutil.parse_contest(cb.get())
+            if not name or not n:
+                messagebox.showerror("导出题解包", "认不出场次「%s」" % cb.get(), parent=win)
+                return
+            letter = ent_letter.get().strip().upper()
+            if letter and not re.match(r"^[A-Z]$", letter):
+                messagebox.showerror("导出题解包", "题号要写单个字母（A~Z），或留空导整场", parent=win)
+                return
+            target = "Round%d%s" % (n, ("-" + letter) if letter else "")
+            out = var_out.get().strip().strip('"')
+            if not out:
+                messagebox.showerror("导出题解包", "给输出 zip 挑个位置（`另存为…`）", parent=win)
+                return
+            win.destroy()
+            w2, text, status, btn = self._open_pack_report(
+                PACK_EXPORT_LABEL.rstrip("…"), "导出 %s → %s" % (target, out), allow_apply=False)
+            self._pack_report_append(text, "正在导出 %s ……\n" % target)
+            self._start_pack_job(kind="export", pack=None,
+                                 argv=pack_export_argv(target, out, self.data_root),
+                                 win=w2, text=text, status=status, btn=btn)
+
+        btns = tk.Frame(win, bg=C_BG)
+        btns.pack(fill="x", padx=16, pady=(8, 14))
+        ttk.Button(btns, text="开始导出", command=go).pack(side="right")
+        ttk.Button(btns, text="取消", command=win.destroy).pack(side="right", padx=(0, 8))
+        ent_out.bind("<Return>", go)
+        win.bind("<Escape>", lambda _e: win.destroy())
+        self._center_on_root(win)
+        default_out()
+        cb.focus_set()
+        win.grab_set()
+        win.wait_window()
+
+    def _open_pack_report(self, title, subtitle, allow_apply):
+        """报告窗：只读文本框 + 状态行 +（导入时）「应用到数据根」。
+
+        返回 (win, text, status, btn)；btn 在 allow_apply=False 时没 pack（调用方仍可拿到）。
+        """
+        win = tk.Toplevel(self.root)
+        win.title("题解包 —— %s" % title)
+        win.configure(bg=C_BG)
+        win.geometry("860x560")
+        top = tk.Frame(win, bg=C_BG)
+        top.pack(fill="x", padx=14, pady=(12, 0))
+        tk.Label(top, text=subtitle, bg=C_BG, fg=C_MUTED, font=(self.fam, 12),
+                 anchor="w", justify="left").pack(fill="x")
+        body = tk.Frame(win, bg=C_BG)
+        body.pack(fill="both", expand=True, padx=14, pady=(8, 0))
+        text = tk.Text(body, wrap="none", font=("Consolas", 10), bg=C_PANEL, fg=C_TEXT,
+                       relief="solid", borderwidth=1)
+        sb = ttk.Scrollbar(body, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+        text.configure(state="disabled")
+        status = tk.Label(win, text="跑着呢……", bg=C_BG, fg=C_ACCENT_DARK, anchor="w",
+                          font=(self.fam, 13, "bold"))
+        status.pack(fill="x", padx=14, pady=(8, 0))
+        btns = tk.Frame(win, bg=C_BG)
+        btns.pack(fill="x", padx=14, pady=(6, 12))
+        tk.Button(btns, text="关闭", command=win.destroy).pack(side="right")
+        btn = None
+        if allow_apply:
+            btn = ttk.Button(btns, text="应用到数据根", state="disabled")
+            btn.pack(side="right", padx=(0, 8))
+        self._center_on_root(win)
+        return win, text, status, btn
+
+    def _pack_report_append(self, text, chunk):
+        """往报告窗追加一段（只读 Text：临时放开 → 追加 → 收回 → 滚到底）。"""
+        try:
+            text.configure(state="normal")
+            text.insert("end", chunk)
+            text.configure(state="disabled")
+            text.see("end")
+        except tk.TclError:
+            pass                                  # 报告窗被关了：任务照跑
+
+    def _start_pack_job(self, kind, pack, argv, win, text, status, btn, applied=False):
+        """后台线程跑 import / export 的 main()：stdout 实时贴进报告窗（同时只跑一个）。"""
+        q = queue.Queue()
+        self._pack_job = {"win": win, "kind": kind, "pack": pack, "queue": q, "applied": applied}
+
+        def worker():
+            old = (sys.stdout, sys.stderr)
+
+            class _QW:                             # stdout → 队列（报告窗实时刷）
+                def write(self, s):
+                    if s:
+                        q.put(("out", s))
+                    return len(s)
+
+                def flush(self):
+                    pass
+
+                def reconfigure(self, **kw):       # 子脚本模块顶层会调（见 pack_cli 的同款注释）
+                    return None
+            sys.stdout = sys.stderr = _QW()
+            rc = 1
+            try:
+                mod = _load_tool("export_solution" if kind == "export" else "import_solution")
+                try:
+                    rc = mod.main(list(argv))
+                except SystemExit as e:
+                    rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+            except Exception:
+                traceback.print_exc()
+                rc = 1
+            finally:
+                sys.stdout, sys.stderr = old
+            q.put(("done", rc))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        self._poll_pack_job(win, text, status, btn)
+
+    def _poll_pack_job(self, win, text, status, btn):
+        """每 150ms 把后台任务的输出贴出来；跑完按（退出码, 是否 --apply）落状态行。
+
+        报告窗被关掉也不打断任务（改轮 root）——跑完一样清 _pack_job、该 reload 就 reload。
+        """
+        job = self._pack_job
+        if job is None:
+            return
+        rc = None
+        try:
+            while True:
+                kind, payload = job["queue"].get_nowait()
+                if kind == "out":
+                    self._pack_report_append(text, payload)
+                else:
+                    rc = payload
+        except queue.Empty:
+            pass
+        if rc is None:
+            try:
+                if win.winfo_exists():
+                    win.after(150, lambda: self._poll_pack_job(win, text, status, btn))
+                    return
+            except tk.TclError:
+                pass
+            self.root.after(150, lambda: self._poll_pack_job(win, text, status, btn))
+            return
+        self._pack_job = None
+        pack, applied, job_kind = job["pack"], job["applied"], job["kind"]
+        if job_kind == "export":
+            can_apply = False
+            verdict = ("导出完成 —— 包在上面写的路径（清单见上）" if rc == 0
+                       else "导出失败（退出码 %d，看上面的报错）" % rc)
+        else:
+            can_apply, verdict = pack_verdict(rc, applied)
+        try:
+            status.config(text=verdict)
+        except tk.TclError:
+            pass
+        if can_apply and btn is not None:
+            try:
+                btn.config(state="normal",
+                           command=lambda: self._pack_apply(pack, win, text, status, btn))
+            except tk.TclError:
+                pass
+        if job_kind == "import" and applied and rc == 0:
+            self.reload(note="已导入题解包", clear_after=TOAST_MS)
+
+    def _pack_apply(self, pack, win, text, status, btn):
+        """「应用到数据根」：同一个包带 --apply 再跑一遍（这一步才真写盘）。"""
+        if self._pack_job is not None:
+            self.set_msg("已有题解包任务在跑，等它结束", clear_after=TOAST_MS)
+            return
+        parent = win if getattr(win, "winfo_exists", lambda: False)() else self.root
+        if not messagebox.askyesno(
+                "导入题解包",
+                "把 %s 导进数据根？\n\n会写文件 / 索引 / 状态表 / 台账（写前自动备份）。"
+                % os.path.basename(pack), parent=parent):
+            return
+        try:
+            btn.config(state="disabled")
+        except tk.TclError:
+            pass
+        self._pack_report_append(text, "\n" + "─" * 62 + "\n── 应用（--apply）──\n")
+        self._start_pack_job(kind="import", pack=pack,
+                             argv=pack_import_argv(pack, self.data_root, True),
+                             win=win, text=text, status=status, btn=btn, applied=True)
+
+    def _center_on_root(self, win):
+        """把对话框 / 报告窗摆到主窗口中间（偏上一点）。"""
+        try:
+            win.update_idletasks()
+            w, h = win.winfo_width(), win.winfo_height()
+            x = self.root.winfo_rootx() + (self.root.winfo_width() - w) // 2
+            y = self.root.winfo_rooty() + (self.root.winfo_height() - h) // 3
+            win.geometry("+%d+%d" % (max(x, 0), max(y, 0)))
+        except tk.TclError:
+            pass
+
     def _error(self, title, text):
         if not self.quiet:
             try:
@@ -2319,6 +2727,29 @@ def selftest():
     print("    (h) 脚本同目录的 %s 全程没被碰过 ✓" % CONFIG_NAME)
     print("[5] fixture 收尾：sha256 = %s（与改回后一致）｜ 临时目录保留在 %s"
           % (_sha256(tmp)[:16], tmpdir))
+
+    # --- v13：[6] 题解包三入口的纯逻辑（argv 拼法 / 退出码文案 / 可导出场次）——
+    # 不开窗口、不碰磁盘；真正的执行（后台线程 / 进程内调用）由 --smoke 与 CLI 闸门覆盖。
+    assert pack_import_argv(r"X:\包.zip", r"X:\root") == [r"X:\包.zip", "--root", r"X:\root"]
+    assert pack_import_argv("a.zip", "r", True) == ["a.zip", "--apply", "--root", "r"]
+    assert pack_export_argv("Round163", "", "R") == ["Round163", "--root", "R"]
+    assert pack_export_argv("Round163-G", "o.zip", "R") == ["Round163-G", "-o", "o.zip", "--root", "R"]
+    can_after, msg_after = pack_verdict(0, True)
+    can_dry, msg_dry = pack_verdict(0, False)
+    assert (can_after, can_dry) == (False, True)
+    assert "导入完成" in msg_after and "校验通过" in msg_dry
+    assert not pack_verdict(1, False)[0] and "不合格" in pack_verdict(1, False)[1]
+    assert not pack_verdict(2, False)[0] and "不可读" in pack_verdict(2, False)[1]
+    rr = pack_round_choices(rows)
+    want_rr = sorted({r["场次"] for r in rows}, key=round_num, reverse=True)
+    assert rr == want_rr == [("牛客周赛 Round %d" % n) for n in
+                             (210, 208, 207, 205, 204, 203, 202, 201, 200, 199, 197, 188)], rr
+    assert pack_round_choices([{"场次": "Codeforces Round 1000"}, {"场次": "Round 161"},
+                               {"场次": "AtCoder ABC 380"}, {"场次": "牛客周赛 Round 210"},
+                               {"场次": "牛客周赛 Round 210"}]) == ["牛客周赛 Round 210"], \
+        "只认「牛客周赛 Round N」形式（跟 export_solution 同口径）、同场次去重"
+    print("[6] 题解包纯逻辑：dry / --apply 两套 argv；退出码 0/1/2 三种文案；"
+          "可导出场次 = 12 场按场次号降序（非牛客 / 认不出的场次不收）✓")
     print("ALL OK")
     return 0
 
@@ -4238,6 +4669,33 @@ def smoke():
     assert len(gui.tree.get_children()) == len(FIXTURE_ROWS)
     print("⑦（同 (zz)）清空 / Esc / Enter / 看板不受影响 / 筛选 ∧ 搜索取交集 ✓")
 
+    # --- v13 闸门 (yy)：菜单「题解包」三项在（导入 / 导出 / ── / 一键校验）；报告窗能建能写；
+    # 有任务在跑时三入口一律拦下（不弹选包框）。真跑导入由 CLI 闸门（--pack-check）覆盖。
+    mb = gui.root.nametowidget(gui.root.cget("menu"))
+    assert mb.entrycget(0, "label") == PACK_MENU_LABEL, mb.entrycget(0, "label")
+    pm = mb.nametowidget(mb.entrycget(0, "menu"))
+    kinds = [pm.type(i) for i in range(pm.index("end") + 1)]
+    labels = [pm.entrycget(i, "label") for i in range(len(kinds)) if kinds[i] != "separator"]
+    assert kinds == ["command", "command", "separator", "command"], kinds
+    assert labels == [PACK_IMPORT_LABEL, PACK_EXPORT_LABEL, PACK_CHECK_LABEL], labels
+    w, rep, st, btn = gui._open_pack_report("导入题解包", "包：X.zip（冒烟）", allow_apply=True)
+    gui._pack_report_append(rep, "hello 报告\n")
+    assert rep.get("1.0", "end").startswith("hello 报告"), rep.get("1.0", "end")
+    assert str(rep.cget("state")) == "disabled" and str(btn.cget("state")) == "disabled"
+    assert st.cget("text") == "跑着呢……" and gui._pack_job is None, "报告窗自己不许起任务"
+    w.destroy()
+    w2, rep2, st2, btn2 = gui._open_pack_report("一键校验", "包：Y.zip（冒烟）", allow_apply=False)
+    assert btn2 is None, "只读的报告窗（一键校验 / 导出）不给「应用到数据根」按钮"
+    w2.destroy()
+    gui._pack_job = {"win": None, "kind": "import", "pack": None,
+                     "queue": queue.Queue(), "applied": False}
+    gui.pack_flow("import")                    # 有任务在跑 → 直接拦下（正常路径要弹选包框，会阻塞）
+    assert "已有题解包任务在跑" in gui.var_msg.get(), gui.var_msg.get()
+    gui._pack_job = None
+    print("(yy) 菜单「题解包」= %s / %s / ── / %s（分隔线一条）；报告窗只读、落盘按钮初始禁用、"
+          "只读窗不给按钮；有任务在跑时三入口拦下 ✓"
+          % (PACK_IMPORT_LABEL, PACK_EXPORT_LABEL, PACK_CHECK_LABEL))
+
     assert gui.config_path is None, "--smoke 走过的地方不许写配置"
     assert _cfg_state(script_cfg) == cfg_state0, \
         "冒烟碰了脚本同目录的 %s（v4 要求 --selftest / --smoke 一律不碰）" % script_cfg
@@ -4249,22 +4707,123 @@ def smoke():
     return 0
 
 
+# ================================================================ 无窗口命令行版（v13）
+def _attach_console():
+    """windowed exe：把 stdout / stderr 接回启动它的控制台（接不上就保持 None）。
+
+    打包成 --windowed 后 Win 不会给进程连控制台，从 cmd / bash 启动时 print 是黑洞；
+    `AttachConsole(-1)` 借父进程的控制台，输出就能被 CI / 终端看到。源码环境不动。
+    """
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        ctypes.windll.kernel32.AttachConsole(-1)
+    except Exception:
+        pass
+    for name, mode in (("stdout", "w"), ("stderr", "w")):
+        cur = getattr(sys, name)
+        if cur is not None:
+            continue
+        try:
+            setattr(sys, name, open("CONOUT$", mode, encoding="utf-8", errors="replace"))
+        except OSError:
+            setattr(sys, name, None)
+
+
+class _Tee:
+    """把输出同时写到若干流（含 None / 已关的流 —— 写不进去就跳过，绝不因日志把任务弄挂）。"""
+
+    def __init__(self, *streams):
+        self.streams = list(streams)
+
+    def write(self, s):
+        for st in self.streams:
+            if st is None:
+                continue
+            try:
+                st.write(s)
+                st.flush()
+            except Exception:
+                pass
+        return len(s) if s else 0
+
+    def flush(self):
+        for st in self.streams:
+            try:
+                if st is not None:
+                    st.flush()
+            except Exception:
+                pass
+
+    def reconfigure(self, **kw):
+        """子脚本**模块顶层**会调它（`fill_knowledge.py` 就是）——这里当 no-op：
+        流在打开时就定好了 utf-8，frozen 下不能因为少这一个方法把整条导入链弄挂。"""
+        return None
+
+    def __getattr__(self, name):
+        """其余属性（encoding / errors / isatty / fileno…）转发给第一个真实流。"""
+        for st in self.streams:
+            if st is not None and hasattr(st, name):
+                return getattr(st, name)
+        raise AttributeError(name)
+
+
+def pack_cli(args):
+    """无窗口跑一个题解包任务（CI / 自动化 / exe），返回退出码。
+
+    与菜单三入口共用同一套 argv 拼法（pack_import_argv / pack_export_argv）与同一个
+    `main()`——命令行走的跟 GUI 走的是一条路。
+    """
+    _attach_console()
+    logf = None
+    logp = args.log
+    if not logp and sys.stdout is None:        # windowed exe 且没接上控制台 → 落日志兜底
+        logp = os.path.join(toolutil.REPO_ROOT, "TimuZhuangtai.log")
+    if logp:
+        logf = open(logp, "a", encoding="utf-8", errors="replace")
+        logf.write("\n===== %s =====\n" % datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    old = (sys.stdout, sys.stderr)
+    sys.stdout = sys.stderr = _Tee(old[0], logf)
+    try:
+        if args.apply and not args.pack_import:
+            print("★ `--apply` 只配合 `--pack-import`（`--pack-check` 是只读的）")
+            return 2
+        if args.pack_export:
+            return _load_tool("export_solution").main(
+                pack_export_argv(args.pack_export, args.out, DATA_ROOT))
+        pack = args.pack_import or args.pack_check
+        return _load_tool("import_solution").main(
+            pack_import_argv(pack, DATA_ROOT, bool(args.apply and args.pack_import)))
+    finally:
+        sys.stdout, sys.stderr = old
+        if logf:
+            logf.close()
+
+
 # ================================================================ 入口
 def main(argv):
     ap = argparse.ArgumentParser(
         description="题目状态跟踪窗口 v13（tkinter）：全键盘改状态 + 多条件筛选（知识点 / 状态 / 难度），"
-                    "只改目标行的状态 / 日期。")
+                    "只改目标行的状态 / 日期；菜单「题解包」= 导入 / 导出 / 一键校验。")
     ap.add_argument("--file", default=DEFAULT_FILE, help="状态表路径（默认 %s）" % DEFAULT_FILE)
     ap.add_argument("--selftest", action="store_true",
                     help="自测：用自造 fixture 做读写校验，不开窗口、不碰真 md")
     ap.add_argument("--smoke", action="store_true",
                     help="窗口冒烟：建窗口 + 走一遍交互，不 mainloop()")
+    ap.add_argument("--pack-import", metavar="包", help="无窗口：校验题解包（加 --apply 才落盘）")
+    ap.add_argument("--pack-check", metavar="包", help="无窗口：只校验题解包，不落盘")
+    ap.add_argument("--pack-export", metavar="Round163[-G]", help="无窗口：导出题解包")
+    ap.add_argument("--apply", action="store_true", help="配合 --pack-import：真写盘（默认只校验）")
+    ap.add_argument("-o", "--out", help="配合 --pack-export：输出 .zip / 目录")
+    ap.add_argument("--log", help="把输出同时写进日志文件（无控制台时默认 exe 旁的 TimuZhuangtai.log）")
     args = ap.parse_args(argv)
 
     if args.selftest:
         return selftest()
     if args.smoke:
         return smoke()
+    if args.pack_import or args.pack_check or args.pack_export:
+        return pack_cli(args)
 
     root = tk.Tk()
     StatusGui(root, args.file, config_path=config_path_default())   # v4：记住上次

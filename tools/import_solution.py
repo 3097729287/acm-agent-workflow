@@ -17,6 +17,9 @@ r"""import_solution —— 导入一个标准「题解包」（默认只校验�
 
 退出码：0 = 成功（archive_check 也过）；1 = 校验有问题（dry 时）/ 齿轮某步失败；
         2 = 包不可读 / 参数错。
+
+环境：源码 / CI 下齿轮（index_sync 等）走子进程；打包成 exe（PyInstaller，frozen）
+     时自动改走进程内调用（`toolutil.run_sibling`），两种形态行为一致。
 """
 import argparse
 import glob
@@ -24,7 +27,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import zipfile
@@ -65,11 +67,10 @@ def same_dir(a, b):
 
 
 def run_py(script, args):
-    """跑同目录脚本，stdout 直接继承（用户要看的报告原样透出）；返回退出码"""
-    cmd = [sys.executable, os.path.join(toolutil.REPO_ROOT, "tools", script)] + args
+    """跑同目录脚本（输出原样透出）；返回退出码。frozen（exe）下自动走进程内。"""
     print("$ python tools%s%s %s" % (BS, script, " ".join(args)))
     sys.stdout.flush()
-    return subprocess.run(cmd, cwd=toolutil.REPO_ROOT).returncode
+    return toolutil.run_sibling(script, args)
 
 
 # ---------------------------------------------------------------- 读包
@@ -236,17 +237,15 @@ def validate(pack_dir, root, rep, mem, check_sol=True):
     if os.path.exists(md):
         n_missing = []
         if check_sol:
-            cs = os.path.join(toolutil.REPO_ROOT, "tools", "check_solution.py")
-            pr = subprocess.run([sys.executable, cs, md, "--quiet"],
-                                capture_output=True, text=True,
-                                encoding="utf-8", errors="replace")
-            tail = (pr.stdout or pr.stderr).strip().splitlines()
-            if pr.returncode == 0:
+            rc, out = toolutil.run_sibling("check_solution.py", [md, "--quiet"],
+                                           capture=True)
+            tail = out.strip().splitlines()
+            if rc == 0:
                 rep.ok("4 题解 md", "%s 过 17 项自检（%s）"
                        % (md_rel, tail[-1].strip("— ") if tail else "退出码 0"))
             else:
                 rep.bad("4 题解 md", "%s 没过 check_solution.py（退出码 %d）：%s"
-                        % (md_rel, pr.returncode, " ｜ ".join(x for x in tail[-4:] if x.strip())))
+                        % (md_rel, rc, " ｜ ".join(x for x in tail[-4:] if x.strip())))
         else:
             rep.warn("4 题解 md", "按 --no-check-solution 跳过了 17 项闸门")
     else:

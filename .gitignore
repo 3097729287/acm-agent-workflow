@@ -20,8 +20,10 @@ tools/package-lock.json
 **/_work/
 __pycache__/
 
-# 图形端本地配置（status_gui.py 会写）
+# 图形端本地配置 / 日志（status_gui.py 会写；exe 放在仓库根时写根目录那两份）
 tools/status_gui.config.json
+status_gui.config.json
+TimuZhuangtai.log
 
 # 编辑器 / agent 本地目录
 .vscode/

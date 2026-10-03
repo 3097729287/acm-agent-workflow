@@ -67,6 +67,12 @@ jobs:
         if: matrix.python == '3.13' && (runner.os == 'Linux' || runner.os == 'Windows')
         run: python tools/selfcheck_import.py
 
+      # contributions\ 是 PR 的投递箱：每个包都跑一遍 import --dry，不过关的包在这里就红。
+      # 先自检闸门自己（好包绿 / 坏包红），再扫 contributions\（空目录 = 没包要扫，正常）。
+      - name: contributions 里的题解包过校验（好包绿 / 坏包红 + 扫 contributions）
+        if: matrix.python == '3.13' && (runner.os == 'Linux' || runner.os == 'Windows')
+        run: python tools/check_contributions.py
+
       - name: 反例必须被拦（断言格式闸退出码非 0）
         if: runner.os == 'Linux' && matrix.python == '3.13'
         run: |
