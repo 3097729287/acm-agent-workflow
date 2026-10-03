@@ -183,6 +183,21 @@ python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串
 把导出的包放进 `contributions\` 提 PR，CI 会替维护者把每个包先校验一遍；
 收下的包导进 `题库\`（发布用的数据根，结构与 `demo\` 一样），投递箱随之清空。
 
+## 把格式闸挂到你自己的仓库（GitHub Action）
+
+同一个 17 项格式闸，也能当 GitHub Action 用——一行 `uses:` 挂到**你自己**仓库的 CI 上，
+题解不合格就变红：
+
+```yaml
+- uses: actions/checkout@v4
+- uses: 3097729287/acm-agent-workflow@main
+  with:
+    path: '题解/**/*.md'      # 哪些 md 是题解，你自己说（支持多个 / 目录 / glob）
+```
+
+不要求你的仓库长成这个仓库的样子。输入、退出码、依赖降级（没 g++ / 没 katex 会如实降级而不是误报）
+与本地预演办法见 [docs/格式闸Action.md](docs/格式闸Action.md)。
+
 ## 工具清单
 
 | 脚本 | 干什么 |

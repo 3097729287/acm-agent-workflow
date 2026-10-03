@@ -81,3 +81,19 @@ jobs:
           else
             echo "反例被拦下 —— 符合预期"
           fi
+
+      # Action 入口（action_run.py）自己也要有闸门：好包 0 / 坏包 1 / 没给 path 2
+      - name: Action 入口自检（action_run.py 的三条退出码路径）
+        if: runner.os == 'Linux' && matrix.python == '3.13'
+        run: |
+          set +e
+          GATE_ROOT="$PWD" GATE_PATHS="demo/题解/**/*题解.md" python skills/check-solution/action_run.py > /dev/null 2>&1
+          rc_good=$?
+          GATE_ROOT="$PWD" GATE_PATHS="examples/反例题解.md" python skills/check-solution/action_run.py > /dev/null 2>&1
+          rc_bad=$?
+          GATE_ROOT="$PWD" GATE_PATHS="" python skills/check-solution/action_run.py > /dev/null 2>&1
+          rc_nopath=$?
+          echo "好包=$rc_good（期望 0）｜坏包=$rc_bad（期望 1）｜没给 path=$rc_nopath（期望 2）"
+          if [ "$rc_good" != 0 ] || [ "$rc_bad" != 1 ] || [ "$rc_nopath" != 2 ]; then
+            echo "Action 入口退出码不对 —— 闸门失效"; exit 1
+          fi
