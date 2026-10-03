@@ -38,5 +38,5 @@ Node+katex 管公式渲染）或者**被开关跳过**了。
 
 ---
 
-需要 Python 3.8+（只用标准库）；g++ 和 Node+katex 可选，缺了只影响对应的那一两项。
+需要 Python 3.9+（只用标准库）；g++ 和 Node+katex 可选，缺了只影响对应的那一两项。
 17 项各自的判定口径与修法见同目录 `SKILL.md`，细节见仓库 `knowledge/` 与 `tools/check_solution.py --list`。
