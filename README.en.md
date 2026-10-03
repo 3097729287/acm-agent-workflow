@@ -188,6 +188,8 @@ No hard-coded paths: set `AGENT_CP_TOOLS` / `AGENT_CP_CONFIG` to relocate the to
 
 `demo\` is one complete round (NowCoder Weekly 163, problems B–G): editorial, per-problem code, verify drivers (B shows the framework-style `verify_b.py`; F is a self-contained script), six archive records, indexes, status table. Both `install.py --check` and `archive_check.py Round163` run against it.
 
+A deliberately broken counterpart ships in `examples\`: the same format gate flags it with eight red items and exit code 1 — run it once and you can see exactly what the gate catches.
+
 ## Contributing
 
 Issues and PRs welcome. Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest` and `selfcheck_unpair.py` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.

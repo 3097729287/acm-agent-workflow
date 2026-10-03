@@ -198,6 +198,8 @@ python tools/status_gui.py       # 图形端（Tkinter）
 
 `demo\` 是**一场完整的数据**（牛客周赛 Round 163 的 B~G）：完整题解 md、每题代码、验证脚本（B 题演示框架写法 `verify_b.py`、F 题是自包含脚本）、6 份算法库记录、索引、状态表。它是这套流程的活样例——`install.py --check` 与 `archive_check.py Round163` 都直接对它跑。
 
+另配一份**故意做坏的反例**（`examples\`）：同一把格式闸跑上去当场报 8 项红、退出码 1——闸门到底拦得住什么，跑一次就看见。
+
 ## 目录结构
 
 ```
@@ -210,6 +212,7 @@ acm-agent-workflow\
 ├── knowledge\           ← 知识库明细（14 篇）
 ├── tools\               ← 全部脚本
 ├── templates\           ← verify 驱动模板
+├── examples\            ← 可跑反例（故意做坏的题解，闸门当场报红）
 └── demo\                ← 自带示例数据（Round 163）
 ```
 
