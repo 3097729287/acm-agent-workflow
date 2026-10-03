@@ -181,6 +181,22 @@ To **contribute a round back to this repo**, see [CONTRIBUTING.md](CONTRIBUTING.
 exported pack into `contributions\` and open a PR — CI validates each pack before a human looks
 at it. Accepted packs are imported into `题库\` (the release data root, same layout as `demo\`).
 
+## Hang the format gate on your own repo (GitHub Action)
+
+The same 17-check gate ships as a GitHub Action — one `uses:` line in **your** repo's CI,
+and a failing editorial turns the job red:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: 3097729287/acm-agent-workflow@main
+  with:
+    path: 'editorials/**/*.md'   # you say which markdown files are editorials
+```
+
+Your repo does not have to look like this one. Inputs, exit codes, and graceful degradation
+(no g++ / no katex degrades honestly instead of false-reporting) are documented in
+[docs/格式闸Action.md](docs/格式闸Action.md) (Chinese), along with how to dry-run it locally.
+
 ## Tools
 
 | Script | Purpose |
