@@ -19,6 +19,37 @@
 | 归档闸 | `archive_check.py RoundNNN` | **退出码 0** = 算法库 / 索引 / 知识库四处对账一致 |
 | 演示闸 | `python install.py --check` | 装完当场把自带示例跑穿一遍 |
 
+## 想直接用？（三选一）
+
+**① 图形端 —— 不装 Python，解压双击就用**
+
+从 [Releases](https://github.com/3097729287/acm-agent-workflow/releases) 下载 `TimuZhuangtai-*.zip`，解压后双击 `TimuZhuangtai.exe`：一个窗口打开你的《题目状态.md》——看今天的补题队列、按 `1`~`6` 改状态（写前自动备份）、导入/导出题解包。包里自带一套示例数据，什么都不用装。
+
+想让它打开**你自己的**数据：编辑包里的 `config.json`，把 `data_root` 改成你的数据根即可（`config.example.json` 是字段说明模板；三个字段的含义见下面的[「配置」](#配置configjson)）。
+
+**② 格式质检 skill —— 一条命令装进 Claude Code**
+
+对题解 md 跑 17 项格式闸（LaTeX 配对、KaTeX 真渲染、代码块真编译、节结构白名单……），每条问题都带行号 + 原句。
+
+```bash
+git clone https://github.com/3097729287/acm-agent-workflow
+cp -r acm-agent-workflow/skills/check-solution ~/.claude/skills/
+```
+
+装完在 Claude Code 里说「对 `我的题解.md` 跑一遍题解质检」即可（细节见 `skills/check-solution/README.md`）。
+
+**③ 完整流水线 —— 让 agent 从抓题面一路跑到归档**
+
+见下面的[「快速开始」](#快速开始5-分钟)与[「使用教程」](#使用教程完整跑一场比赛)。
+
+```bash
+git clone https://github.com/3097729287/acm-agent-workflow
+cd acm-agent-workflow
+python install.py           # 环境体检 + 拿自带示例把全部闸门跑一遍
+```
+
+只要求 **Python 3.9+，零第三方库**——不用 `pip install` 任何东西（全部标准库）；g++ / node 都是可选增强，没有会如实降级（见下面[「快速开始」](#快速开始5-分钟)）。
+
 ## 它解决什么
 
 - **「实测记录」靠生成？** 不允许。这套流程里验证数字必须逐字来自实跑，没跑的档如实写「未验证」——仓库里留着一份[反面教材](knowledge/11-反面教材.md)：写得像真的、复跑第一组就翻车的记录长什么样。
@@ -37,6 +68,8 @@
 - 算法库归档 **57 份记录**、覆盖 **31 个算法文件夹**。
 
 ## 快速开始（5 分钟）
+
+**环境要求**：Python 3.9+（Windows / macOS / Linux 都行）。**零第三方依赖**——不用 `pip install` 任何东西，全部标准库；抓题面用系统自带的 `curl`。两样可选增强：`g++`（随机对拍要编译，没有则如实降级「未验证」）与 `node` + `katex`（公式渲染检查，装法见 [FAQ](#faq)）。图形端在 Linux 上若提示缺 tkinter，装 `python3-tk` 即可。
 
 ```bash
 git clone https://github.com/3097729287/acm-agent-workflow
