@@ -2,7 +2,7 @@
 
 **给 AI agent 用的算法竞赛「题解 + 补题」流水线。** 把「写完题解就烂尾」变成一条有机器闸门的流水线：抓题面 → 写代码 → 四档验证 → 生成题解 → 格式自检 → 归档对账，外加一个跟踪每道题掌握程度的状态表（带图形端）。
 
-[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) ｜ [English](README.en.md) ｜ Windows 优先（图形端）｜ 核心流程三平台 CI 全绿：Ubuntu / macOS / Windows × Python 3.9 / 3.13 ｜ MIT License
+[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [English](README.en.md) ｜ Windows 优先（图形端）｜ 核心流程三平台 CI 全绿：Ubuntu / macOS / Windows × Python 3.9 / 3.13 ｜ MIT License ｜ 当前为 **v0.1.0 早期演示版**，欢迎来 [Issues](https://github.com/3097729287/acm-agent-workflow/issues) 提意见
 
 ---
 

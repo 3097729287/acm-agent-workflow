@@ -2,7 +2,7 @@
 
 **An AI-agent pipeline for competitive-programming upsolving: solutions, verification, and archiving.** It turns "write solutions and forget about them" into a pipeline with machine-checked gates: fetch statements → write code → four-tier verification → render the write-up → format gate → archive reconciliation, plus a status tracker for every problem you upsolve (with a GUI).
 
-[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) ｜ [中文](README.md) ｜ Windows-first (GUI) ｜ Core pipeline CI-green on Ubuntu / macOS / Windows × Python 3.9 / 3.13 ｜ MIT License
+[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [中文](README.md) ｜ Windows-first (GUI) ｜ Core pipeline CI-green on Ubuntu / macOS / Windows × Python 3.9 / 3.13 ｜ MIT License ｜ Currently **v0.1.0 (early preview)** — feedback welcome via [Issues](https://github.com/3097729287/acm-agent-workflow/issues)
 
 ---
 
