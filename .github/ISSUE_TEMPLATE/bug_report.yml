@@ -1,0 +1,56 @@
+name: 报 Bug（Bug report）
+description: 脚本报错 / 闸门行为不对 / 文档写的和实跑不一致
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先扫一眼已有 issue 里有没有同一个问题；**把完整输出贴进来**（含退出码），
+        只说「报错了」没法排查——这套项目里几乎每条结论都要对得上一个退出码。
+        Please search existing issues first, and paste the **full output including the exit code**.
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 运行环境 / OS
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - 其它 Other
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python 版本 / Python version
+      description: "`python --version` 的输出"
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: 你跑的哪条命令 / Command you ran
+      placeholder: "python tools/archive_check.py Round163"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际发生了什么 / What happened
+      description: 完整输出（含退出码）。刷屏太长可以折叠，但别删关键行。
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你预期是什么 / What you expected
+      description: 比如「README 写退出码 0，实际是 1」——把文档位置一起写更好。
+    validations:
+      required: true
