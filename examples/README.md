@@ -1,48 +1,21 @@
 # examples/：可跑的反例
 
-`反例题解.md` 是一份**故意做坏**的题解，用来证明格式闸不是摆设：
+给想确认「格式闸到底拦得住什么」的人。两样东西各管一件事：`反例题解.md` 是故意做坏的反例，
+`luogu/` 是抓题面工具的离线回归 fixture。仓库总览见 [../README.md](../README.md)。
+
+## 反例题解.md：故意做坏的活证据
+
+`反例题解.md` 是一份**故意做坏**的题解：同一把 17 项格式闸，跑在真题解上退出码 0，跑在这份上
+**当场报红、退出码 1**：
 
 ```bash
 python tools/check_solution.py examples/反例题解.md
 ```
 
-**退出码 1**（= 有问题，改完再交付），8 项检查当场报红。下面是真实运行输出（有删节：
-编译器报错里的本机临时路径省略为 `<tmp>`，长行截断）：
+**退出码 1**（= 有问题，改完再交付），**8 项**报红；每条问题都带**行号 + 原句**，末行给出
+「★有问题，改完再交付★」的结论。具体行号与计数随文件与检查项版本浮动，以实跑为准。
 
-```
-==========================================================================
-自检：examples/反例题解.md
-  共 766 字符 / 53 行（其中代码块外的正文检查 525 字符）
-==========================================================================
-
-[问题] 1. `$` 不配对（1 处）
-  第 20 行：1 个 `$` 配不上对：给一个十六进制字符串 x（长度 ≤ 8×10^5），问它表示的整数能否被 $2^k 整除（k \le 10^5）。
-[问题] 1b. 反斜杠命令在 `$` 外（漏包，1 处）
-  第 20 行：\le 落在 $ 外：...
-[问题] 2. 还有 6 行可转成 LaTeX（跑 `python unify_latex.py <md> apply`）
-[问题] 6. 实测记录里有模糊数（数字必须来自实跑输出）
-  共 1 处，如：约 5
-[问题] 9. 节结构不合白名单（3 处）
-  第 18 行：题内标题带编号（「### 1. 题意」要写成「### 题意」）：1. 题意
-  第 40 行：题内 `###` 标题不在白名单：正确性证明
-  第 40 行：出现禁用节名「正确性证明」
-[问题] 10. 目录表不合「题号 | 题名 | 考点 | 难度」（2 处）
-  第 12 行：目录表头是 题号 | 题名 | 难度 | 考点，标准是 题号 | 题名 | 考点 | 难度
-  第 14 行：难度列是「位运算」，标准是「CF <数字>」
-[问题] 11. 题内小节顺序/必写项不合标准（2 处）
-  ## A. 十六进制与 2^k：小节顺序是 1. 题意 > 参考代码 > 复杂度 > 正确性证明 > 手算，标准是 题意 > 从零讲 > 手算 > 思路 > 参考代码 > 复杂度 > 易错点
-  ## A. 十六进制与 2^k：缺必写小节 题意、思路、易错点
-[问题] 5. 代码块编译（0 个通过，1 个失败）
-  第 1 个代码块（md 第 25 行起）编译失败：
-      <tmp>/blk1.cpp:6:18: error: expected ';' before 'cout'
-
-（其余各项：3 / 4 / 4b / 7 / 7b / 8 / 16 通过；17 因没装 katex 标「不适用」）
-
---------------------------------------------------------------------------
-结论：★有问题，改完再交付★（8 项有问题）
-```
-
-## 埋了什么，谁抓的
+埋了什么、谁抓的：
 
 | 埋的毛病 | 抓它的检查 |
 |---|---|
@@ -55,13 +28,13 @@ python tools/check_solution.py examples/反例题解.md
 | 参考代码少一个分号 | 第 5 项（编译） |
 | 实测记录写成列表、出现「约 500」模糊数 | 第 6 项 |
 
-这批毛病都不是编的——每一条都能在 `knowledge\` 的坑表里找到原型：节结构与目录表见
-《题解写法》，LaTeX 见《数学 LaTeX》，模糊数见《验证协议》。
+这批毛病不是编的——每一条都能在 `knowledge\` 的坑表里找到原型：节结构与目录表见
+[题解写法](../knowledge/03-题解写法.md)，LaTeX 见 [数学 LaTeX](../knowledge/05-数学LaTeX.md)，模糊数见 [验证协议](../knowledge/04-验证协议.md)。
 
-对照跑一下真示例，能看出这道闸「绿」是什么样：
+对照跑一下真示例，能看出这道闸「绿」是什么样（退出码 0）：
 
 ```bash
-python tools/check_solution.py demo/题解/牛客周赛/Round163/Round163题解.md   # 退出码 0
+python tools/check_solution.py demo/题解/牛客周赛/Round163/Round163题解.md
 ```
 
 ## luogu/：抓取解析的离线回归
@@ -78,15 +51,3 @@ python tools/fetch_problem.py --selftest     # 拿原始返回重跑解析链，
 ```
 
 CI 每个矩阵格都跑这一步——抓题面的解析链改动后，不用联网也能知道产物会不会变形。
-
-## English
-
-`反例题解.md` ("counter-example editorial") is deliberately broken. Running the 17-check
-format gate on it fails with **exit code 1** and eight red items; the table above maps each
-planted flaw to the check that catches it, and the output block is from a real run (local
-temporary paths trimmed). The bundled demo editorial passes the same gate with exit code 0.
-
-`luogu/` holds the raw responses and rendered artifacts of a real Luogu fetch (one whole
-ended contest + one single problem), used by `tools/fetch_problem.py --selftest` as an
-offline regression: it replays the parsing chain and byte-compares the artifacts. CI runs it
-on every matrix cell.
