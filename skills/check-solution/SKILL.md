@@ -18,11 +18,12 @@ description: 题解 md 的格式质检闸：对一份或多份题解 md 跑 17 �
 
 ## 怎么跑
 
-一条命令（`<本skill目录>` = 本 skill 的目录，加载时会给出它的绝对路径；没看到路径就自己找一下：
-`ls ~/.claude/skills/check-solution/gate.py`，或它在仓库里的位置是 `<仓库根>/skills/check-solution/`）：
+一条命令（`${CLAUDE_SKILL_DIR}` 由 Claude Code 替换成本 skill 的绝对路径。**如果你是直接 Read 这个文件、
+看到的是没被替换的原文**，就把它换成实际路径——skill 一般在 `~/.claude/skills/check-solution/`，
+仓库里那份在 `<仓库根>/skills/check-solution/`）：
 
 ```bash
-python "<本skill目录>/gate.py" <题解.md> [更多.md ...]
+python "${CLAUDE_SKILL_DIR}/gate.py" <题解.md> [更多.md ...]
 ```
 
 `gate.py` 只干一件事：找到仓库根，再把参数**原样**交给 `tools/check_solution.py`，退出码也原样传出来。
@@ -74,7 +75,7 @@ python "<本skill目录>/gate.py" <题解.md> [更多.md ...]
 它会顺带对包内每份题解 md 跑同一套 17 项闸门，另外查字段、文件名、知识点词典、覆盖冲突：
 
 ```bash
-python tools/import_solution.py <包>          # dry：只校验 + 出报告，不动盘
+python tools/import_solution.py <包>          # dry：只校验 + 出报告，不动盘（在仓库根跑）
 ```
 
 ## 报告给用户时的格式
