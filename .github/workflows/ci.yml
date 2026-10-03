@@ -39,6 +39,11 @@ jobs:
       - name: 知识点词典自检（名字规范的唯一出处，数据坏了这里先红）
         run: python tools/knowledge_dict.py selftest
 
+      # 离线（不联网）：拿 examples/luogu/ 里的原始返回重跑洛谷解析链，
+      # 与落盘的题面 / samples.py / 题单.md 逐字比对
+      - name: 洛谷抓取解析自检（fixture 原始返回 → 产物逐字）
+        run: python tools/fetch_problem.py --selftest
+
       # 下面两步要编译器/Node，只在 Linux + 单版本上跑，避免矩阵重复
       - name: 交付前复验：md 里的代码四档全跑（GCC）
         if: runner.os == 'Linux' && matrix.python == '3.13'
