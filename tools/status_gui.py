@@ -216,6 +216,18 @@ v15（2026-10-03）：
     ⑤ 面板底部「清空」按钮**删除**（v15 末用户点名「去掉清空选项」；底排只留「筛出 N 题」，
        要清条件走 Esc 逐层退回）；第一行元素间距调匀。
 
+v16（2026-10-03，观感版）：用户从三方案里选「只换观感、不动布局」，另点名「能合并的
+    按钮弄到同一行」——**题解包三弹窗只动观感 + 两处按钮合排**（键位、匹配逻辑、其余
+    控件位置一律未动）：
+    ① 新增 ttk 样式 `Accent.TButton`（强调色底 + 白字；禁用自动变浅灰）—— 选包窗
+       「开始」、导出窗「开始导出」、报告窗「应用到数据根」用它。
+    ② 报告窗状态行跑完按结果着色：成功绿 `C_OK` / 失败红 `C_ERR`（跑着仍是强调色）。
+    ③ 选包窗路径框加灰字占位「包路径」（`register=False`，弹窗临时框不进 `_ph_syncs`）；
+       空路径时「开始」禁用（原来点了静默没反应）。
+    ④ 按钮合排：选包窗**四个按钮并成一行**（「选 zip…」「选目录…」靠左、「取消」「开始」
+       靠右，不再单占底排 —— 用户二次看图点名）；导出窗「另存为…」从单独一行 →
+       挪到输出框同一行右端。
+
 记住上次（v4）：
     关窗时把 窗口大小 + 位置 + 排序字段 + 升/降序 存成脚本同目录的 `status_gui.config.json`
     （纯 LF、UTF-8、键用小写英文）；下次打开照上次来，文件没有 / 读不动 / 值不对就回默认。
@@ -375,6 +387,8 @@ C_LINE = "#b9c3d6"          # v6：输入控件的常态边框（聚焦时换成
 C_SELECT_OFF = "#c9d4e6"    # v6：失焦时选中行的底色（聚焦时是 C_ACCENT —— 一眼看出焦点在哪）
 C_PLACEHOLDER = "#9aa6ba"   # v15：空输入框里的灰字占位提示（比 C_MUTED 再浅一档）
 LABEL_PAD = "　"            # v15：全角空格 —— 两字标签插一个 = 三字宽，四行控件的左缘才能对齐
+C_OK = "#1a7f37"            # v16：报告窗跑完的成功状态行（绿）
+C_ERR = "#c0392b"           # v16：报告窗跑完的失败状态行（红）
 
 # 场次号：优先用 tools 侧导出的正则；tools 正在做「多平台场次键」重构、这个常量可能还没回来，
 # 兜底用本地的同款正则（= 改造前的 SR.ROUND_RE：取场次文本里第一串数字），别让 GUI 因 tools 改版打不开。
@@ -1157,6 +1171,21 @@ class StatusGui(object):
                bordercolor=[("focus", C_ACCENT)], lightcolor=[("focus", C_ACCENT)],
                darkcolor=[("focus", C_ACCENT)],
                fieldbackground=[("focus", C_ACCENT_LIGHT)])
+        # v16：弹窗主按钮（「开始 / 开始导出 / 应用到数据根」）—— 强调色底 + 白字，
+        # 禁用时整颗变浅灰（选包窗空路径时「开始」禁用靠它）
+        st.configure("Accent.TButton", background=C_ACCENT, foreground="#ffffff",
+                     font=(self.fam, 13, "bold"), padding=(14, 6),
+                     relief="flat", borderwidth=0,
+                     bordercolor=C_ACCENT, lightcolor=C_ACCENT, darkcolor=C_ACCENT)
+        st.map("Accent.TButton",
+               background=[("disabled", C_SELECT_OFF), ("pressed", C_ACCENT_DARK),
+                           ("active", C_ACCENT_DARK)],
+               foreground=[("disabled", C_MUTED)],
+               bordercolor=[("disabled", C_SELECT_OFF)],
+               lightcolor=[("disabled", C_SELECT_OFF), ("pressed", C_ACCENT_DARK),
+                           ("active", C_ACCENT_DARK)],
+               darkcolor=[("disabled", C_SELECT_OFF), ("pressed", C_ACCENT_DARK),
+                          ("active", C_ACCENT_DARK)])
         # v9：`Nav.TCombobox`（状态筛选下拉的样式，v7 加的）随筛选整块删除 —— 窗口里没有下拉框了。
 
     def _make_head(self):
@@ -1287,12 +1316,14 @@ class StatusGui(object):
         self._paint_chips()
 
     # ------------------------------------------------------------ 占位提示（v15）
-    def _add_placeholder(self, ent, text):
+    def _add_placeholder(self, ent, text, register=True):
         """空框且没焦点时浮一句浅灰提示语；聚焦 / 有字就隐。
 
         提示是**浮在输入框上的 Label**（`place` 在框内），不写进 textvariable ——
         `ent.get()` 仍是空串，匹配逻辑 / 命令行看不到它，不参与搜索。
         x=8 是给 Nav.TEntry 的 padding(7,5) + 1px 边框留的位置。
+        register=False = 弹窗里的临时输入框（v16）：不进 `_ph_syncs`，窗销毁后
+        主窗的「程序性清空 → 重同步」不会再碰它。
         """
         lbl = tk.Label(ent, text=text, bg=C_PANEL, fg=C_PLACEHOLDER,
                        font=(self.fam, 13), takefocus=0)
@@ -1311,7 +1342,8 @@ class StatusGui(object):
         ent.bind("<FocusIn>", sync, add="+")
         ent.bind("<FocusOut>", sync, add="+")
         ent.bind("<KeyRelease>", sync, add="+")     # 打字 / 删空都走这条
-        self._ph_syncs.append(sync)
+        if register:                                # v16：弹窗临时框不登记
+            self._ph_syncs.append(sync)
         sync()
 
     def _dropdown_open(self, event=None):
@@ -2448,7 +2480,13 @@ class StatusGui(object):
                              win=win, text=text, status=status, btn=btn)
 
     def _ask_pack_path(self):
-        """选包对话框（zip 或解压后的目录二选一）。返回路径；取消 = None。"""
+        """选包对话框（zip 或解压后的目录二选一）。返回路径；取消 = None。
+
+        v16：一行四按钮布局（用户二次看图点名）—— 路径框带灰字占位；
+        「选 zip…」「选目录…」与「取消」「开始」**并成一行**（选择在左、
+        取消 / 开始在右，不再单占底排）；主按钮「开始」用 Accent 样式、
+        空路径时禁用（原来点了静默没反应）。
+        """
         win = tk.Toplevel(self.root)
         win.title("选择题解包")
         win.configure(bg=C_BG)
@@ -2456,11 +2494,12 @@ class StatusGui(object):
         win.resizable(False, False)
         var = tk.StringVar()
         body = tk.Frame(win, bg=C_BG)
-        body.pack(fill="both", expand=True, padx=16, pady=(14, 4))
+        body.pack(fill="both", expand=True, padx=16, pady=(14, 14))
         tk.Label(body, text="题解包（.zip 或解压后的目录）：", bg=C_BG, fg=C_TEXT,
                  font=(self.fam, 13)).grid(row=0, column=0, columnspan=3, sticky="w")
         ent = ttk.Entry(body, textvariable=var, width=48, font=(self.fam, 13))
-        ent.grid(row=1, column=0, columnspan=2, sticky="we", pady=(6, 0))
+        ent.grid(row=1, column=0, columnspan=3, sticky="we", pady=(6, 0))
+        self._add_placeholder(ent, "包路径", register=False)   # v16：弹窗临时框不登记
 
         def pick(kind):
             if kind == "zip":
@@ -2471,10 +2510,12 @@ class StatusGui(object):
             if p:
                 var.set(os.path.normpath(p))
 
-        ttk.Button(body, text="选 zip…", command=lambda: pick("zip")).grid(
-            row=1, column=2, sticky="w", padx=(8, 0), pady=(6, 0))
-        ttk.Button(body, text="选目录…", command=lambda: pick("dir")).grid(
-            row=2, column=2, sticky="w", padx=(8, 0))
+        # v16：四个按钮一行 —— 选包按钮靠左，取消 / 开始在右（原来「选择一行 + 底排一行」）
+        row = tk.Frame(body, bg=C_BG)
+        row.grid(row=2, column=0, columnspan=3, sticky="we", pady=(10, 0))
+        ttk.Button(row, text="选 zip…", command=lambda: pick("zip")).pack(side="left")
+        ttk.Button(row, text="选目录…", command=lambda: pick("dir")).pack(side="left", padx=(8, 0))
+        tk.Frame(row, bg=C_BG, width=32, height=1).pack(side="left", fill="x", expand=True)
         out = {"path": None}
 
         def ok(*_e):
@@ -2484,10 +2525,15 @@ class StatusGui(object):
             out["path"] = os.path.normpath(p)
             win.destroy()
 
-        btns = tk.Frame(win, bg=C_BG)
-        btns.pack(fill="x", padx=16, pady=(8, 14))
-        ttk.Button(btns, text="开始", command=ok).pack(side="right")
-        ttk.Button(btns, text="取消", command=win.destroy).pack(side="right", padx=(0, 8))
+        btn_ok = ttk.Button(row, text="开始", style="Accent.TButton", command=ok)
+        btn_ok.pack(side="right")
+        ttk.Button(row, text="取消", command=win.destroy).pack(side="right", padx=(0, 8))
+
+        def sync_ok(*_e):                           # v16：空路径 → 主按钮禁用
+            btn_ok.config(state=("normal" if var.get().strip() else "disabled"))
+        var.trace_add("write", sync_ok)
+        sync_ok()
+
         ent.bind("<Return>", ok)
         win.bind("<Escape>", lambda _e: win.destroy())
         self._center_on_root(win)
@@ -2497,7 +2543,11 @@ class StatusGui(object):
         return out["path"]
 
     def pack_export_dialog(self):
-        """「导出题解包…」：选场次（可选题号 = 单题包）→ 输出 zip → 后台导出，报告进报告窗。"""
+        """「导出题解包…」：选场次（可选题号 = 单题包）→ 输出 zip → 后台导出，报告进报告窗。
+
+        v16（只动观感 + 按钮合排）：主按钮「开始导出」用 Accent 样式；「另存为…」
+        从单独一行挪到输出框同一行右端（用户点名「能合并的按钮弄到同一行」）。
+        """
         if self._pack_job is not None:
             self.set_msg("已有题解包任务在跑，等它结束", clear_after=TOAST_MS)
             return
@@ -2523,8 +2573,8 @@ class StatusGui(object):
         tk.Label(body, text="输出 zip", bg=C_BG, fg=C_TEXT,
                  font=(self.fam, 13)).grid(row=1, column=0, sticky="w", pady=(10, 0))
         var_out = tk.StringVar()
-        ent_out = ttk.Entry(body, textvariable=var_out, width=48, font=(self.fam, 13))
-        ent_out.grid(row=1, column=1, columnspan=3, sticky="we", padx=(8, 0), pady=(10, 0))
+        ent_out = ttk.Entry(body, textvariable=var_out, width=44, font=(self.fam, 13))
+        ent_out.grid(row=1, column=1, columnspan=2, sticky="we", padx=(8, 8), pady=(10, 0))
 
         def default_out(*_e):
             name, n = toolutil.parse_contest(cb.get())
@@ -2542,7 +2592,8 @@ class StatusGui(object):
             if p:
                 var_out.set(os.path.normpath(p))
 
-        ttk.Button(body, text="另存为…", command=save_as).grid(row=2, column=3, sticky="e", pady=(6, 0))
+        ttk.Button(body, text="另存为…", command=save_as).grid(
+            row=1, column=3, sticky="w", pady=(10, 0))   # v16：与输出框同一行（原来单独一行）
         cb.bind("<<ComboboxSelected>>", default_out)
         ent_letter.bind("<KeyRelease>", default_out)
 
@@ -2570,7 +2621,7 @@ class StatusGui(object):
 
         btns = tk.Frame(win, bg=C_BG)
         btns.pack(fill="x", padx=16, pady=(8, 14))
-        ttk.Button(btns, text="开始导出", command=go).pack(side="right")
+        ttk.Button(btns, text="开始导出", style="Accent.TButton", command=go).pack(side="right")
         ttk.Button(btns, text="取消", command=win.destroy).pack(side="right", padx=(0, 8))
         ent_out.bind("<Return>", go)
         win.bind("<Escape>", lambda _e: win.destroy())
@@ -2610,8 +2661,8 @@ class StatusGui(object):
         tk.Button(btns, text="关闭", command=win.destroy).pack(side="right")
         btn = None
         if allow_apply:
-            btn = ttk.Button(btns, text="应用到数据根", state="disabled")
-            btn.pack(side="right", padx=(0, 8))
+            btn = ttk.Button(btns, text="应用到数据根", style="Accent.TButton", state="disabled")
+            btn.pack(side="right", padx=(0, 8))      # v16：主按钮样式（禁用时自动变浅灰）
         self._center_on_root(win)
         return win, text, status, btn
 
@@ -2699,7 +2750,7 @@ class StatusGui(object):
         else:
             can_apply, verdict = pack_verdict(rc, applied)
         try:
-            status.config(text=verdict)
+            status.config(text=verdict, fg=(C_OK if rc == 0 else C_ERR))   # v16：成功绿 / 失败红
         except tk.TclError:
             pass
         if can_apply and btn is not None:
@@ -4970,6 +5021,9 @@ def smoke():
     assert rep.get("1.0", "end").startswith("hello 报告"), rep.get("1.0", "end")
     assert str(rep.cget("state")) == "disabled" and str(btn.cget("state")) == "disabled"
     assert st.cget("text") == "跑着呢……" and gui._pack_job is None, "报告窗自己不许起任务"
+    assert st.cget("fg") == C_ACCENT_DARK, "v16：状态行起步是强调色（跑着呢）"
+    assert ttk.Style(gui.root).configure("Accent.TButton")["background"] == C_ACCENT, \
+        "v16：Accent 主按钮样式已配置"
     w.destroy()
     w2, rep2, st2, btn2 = gui._open_pack_report("一键校验", "包：Y.zip（冒烟）", allow_apply=False)
     assert btn2 is None, "只读的报告窗（一键校验 / 导出）不给「应用到数据根」按钮"
