@@ -36,6 +36,14 @@ jobs:
       - name: 索引同步 dry（两处无 diff 才算过）
         run: python tools/index_sync.py dry
 
+      - name: 知识点词典自检（名字规范的唯一出处，数据坏了这里先红）
+        run: python tools/knowledge_dict.py selftest
+
+      # 离线（不联网）：拿 examples/luogu/ 里的原始返回重跑洛谷解析链，
+      # 与落盘的题面 / samples.py / 题单.md 逐字比对
+      - name: 洛谷抓取解析自检（fixture 原始返回 → 产物逐字）
+        run: python tools/fetch_problem.py --selftest
+
       # 下面两步要编译器/Node，只在 Linux + 单版本上跑，避免矩阵重复
       - name: 交付前复验：md 里的代码四档全跑（GCC）
         if: runner.os == 'Linux' && matrix.python == '3.13'
@@ -53,6 +61,17 @@ jobs:
           cd ..
           python tools/check_solution.py "demo/题解/牛客周赛/Round163/Round163题解.md"
           python tools/check_solution.py "demo/题解/牛客周赛/Round161/Round161题解.md"
+
+      # Linux 这格同时验「包内相对路径一律反斜杠」在 POSIX 分隔符下的落盘（to_os 分支）
+      - name: 题解包导入 / 导出闸门（往返无损 + 未登记名字照收）
+        if: matrix.python == '3.13' && (runner.os == 'Linux' || runner.os == 'Windows')
+        run: python tools/selfcheck_import.py
+
+      # contributions\ 是 PR 的投递箱：每个包都跑一遍 import --dry，不过关的包在这里就红。
+      # 先自检闸门自己（好包绿 / 坏包红），再扫 contributions\（空目录 = 没包要扫，正常）。
+      - name: contributions 里的题解包过校验（好包绿 / 坏包红 + 扫 contributions）
+        if: matrix.python == '3.13' && (runner.os == 'Linux' || runner.os == 'Windows')
+        run: python tools/check_contributions.py
 
       - name: 反例必须被拦（断言格式闸退出码非 0）
         if: runner.os == 'Linux' && matrix.python == '3.13'

@@ -22,6 +22,11 @@
      只认 `牛客周赛 Round 161` / `Codeforces Round 1000` / `AtCoder ABC 380`
      （ARC / AGC 同）三种写法；带后缀、没比赛名、其它形式一律 `(None, None)`
      —— **绝不猜**。多平台混排时别拿裸场次号当键（Codeforces Round 161 ≠ 牛客 Round 161）。
+  5. `is_junk(rel)` / `walk_files(base)` / `copy_tree(...)` —— 题解包（导入导出）
+     共用的垃圾过滤与收集：目录名命中 JUNK_DIRS 整棵跳过、后缀命中 JUNK_SUFFIX 剔。
+  6. `run_sibling(script, args)` —— 跑 `tools\\` 里的兄弟脚本 → 退出码：源码环境起
+     子进程（与手跑一致），frozen（PyInstaller 打的 exe，没有解释器可用）进程内
+     import 调 `main()` —— 两种形态行为对齐，capture=True 时都把输出抓成字符串。
 
 自检：`python toolutil.py`（跑一组断言，全过打印 OK）。
 """
@@ -30,9 +35,15 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, "frozen", False):
+    # PyInstaller 打包的 exe：代码在临时解包目录里，资源（config.json / knowledge\ /
+    # demo\）都在 **exe 旁边** —— REPO_ROOT 跟着 exe 走，别去找一次性临时目录。
+    REPO_ROOT = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 # ---------------------------------------------------------------- 配置
@@ -165,6 +176,77 @@ def fence_blocks(text, languages=None, indent=False):
     return out
 
 
+# ---------------------------------------------------------------- 垃圾过滤
+# 题解包（导出 / 导入）共用的过滤口径：包里只装源码与文档，装不装都行的耗材一律剔除。
+#   目录名命中 → 整棵跳过；文件名后缀命中 → 剔。
+# 与《归档》的「清理约定」同一口径（不留 .exe / png；_work\ 是耗材）。
+JUNK_DIRS = {"_work", "__pycache__", ".git", ".claude", ".vs", ".vscode", "node_modules"}
+JUNK_SUFFIX = (".exe", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".pyc",
+               ".o", ".obj", ".bak", ".orig", "~", ".zip", ".7z", ".rar", ".log")
+BS_SEP = chr(92)          # 反斜杠
+
+
+def is_junk(rel):
+    """相对路径是否为垃圾（包过滤口径）。目录名命中即算，别只比文件名。"""
+    parts = rel.replace("\\", "/").strip("/").split("/")
+    if any(p in JUNK_DIRS for p in parts):
+        return True
+    fn = parts[-1]
+    return fn.endswith(JUNK_SUFFIX)
+
+
+def to_os(rel):
+    """库内相对路径（一律反斜杠写法）→ 本机路径分隔符。
+
+    题解包 / 索引 / manifest 里的相对路径**统一写反斜杠**（跨机器一个口径），
+    拼本机路径前必须换成本机分隔符：Windows 上是 no-op，Linux/macOS 上换成 `/`。
+    不换的话 `os.path.join(root, "题解\\牛客周赛\\x.md")` 在 Linux 上会变成
+    **一个名字里带反斜杠的文件**，而不是三层目录。
+    """
+    if os.sep == BS_SEP:
+        return rel
+    return rel.replace(BS_SEP, os.sep)
+
+
+def walk_files(base):
+    """递归列文件 → [(绝对路径, 相对 base 的路径)]，垃圾已过滤、按相对路径排序。
+
+    相对路径统一用反斜杠（Windows 习惯，与库里其它工具一致；os.walk 会保留
+    输入路径的斜杠风格，这里强制归一，别让 `B-G/B/b.cpp` 和 `B-G\\B\\b.cpp` 两种写法并存）。
+    """
+    out = []
+    for dp, dns, fns in os.walk(base):
+        dns[:] = sorted(d for d in dns if d not in JUNK_DIRS)
+        for fn in sorted(fns):
+            p = os.path.join(dp, fn)
+            rel = os.path.relpath(p, base).replace(os.sep, BS_SEP).replace("/", BS_SEP)
+            if is_junk(rel):
+                continue
+            out.append((p, rel))
+    out.sort(key=lambda x: x[1])
+    return out
+
+
+def copy_tree(src_base, dst_base, files=None, overwrite=False):
+    """把 files（[(绝对路径, 相对路径)]，缺省 = walk_files(src_base)）复制到 dst_base 下。
+
+    返回 (copied, skipped)：skipped = 目标已存在且 overwrite=False 的相对路径。
+    只建需要的子目录；行尾 / 编码原样保留（二进制复制）。
+    """
+    if files is None:
+        files = walk_files(src_base)
+    copied, skipped = [], []
+    for src, rel in files:
+        dst = os.path.join(dst_base, to_os(rel))
+        if os.path.exists(dst) and not overwrite:
+            skipped.append(rel)
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)
+        copied.append(rel)
+    return copied, skipped
+
+
 # ---------------------------------------------------------------- 场次键
 _CONTEST_RES = (
     (re.compile(r"^牛客周赛\s+Round\s+(\d+)$"), "牛客周赛"),
@@ -189,6 +271,48 @@ def parse_contest(s):
         if m:
             return name, int(m.group(1))
     return None, None
+
+
+# ---------------------------------------------------------------- 跑兄弟脚本
+def run_sibling(script, args, capture=False):
+    """跑 `tools\\` 下的兄弟脚本 → 退出码（capture=True 时 → (退出码, 输出文本)）。
+
+    源码环境 = 起子进程跑 `python tools\\<script> ...`（输出继承控制台 / 捕获，与手跑
+    完全一致）；frozen（PyInstaller 打的 exe 里没有解释器可用）= 进程内 import 后调
+    `main()`，capture=True 时临时把 stdout / stderr 换成字符串缓冲——调用方在两种
+    环境看到的行为对齐。子脚本清单必须随 exe 一起打包（见打包说明的 --hidden-import）。
+    """
+    if not getattr(sys, "frozen", False):
+        cmd = [sys.executable, os.path.join(REPO_ROOT, "tools", script)] + list(args)
+        if capture:
+            p = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT,
+                               encoding="utf-8", errors="replace")
+            return p.returncode, (p.stdout or "") + (p.stderr or "")
+        return subprocess.run(cmd, cwd=REPO_ROOT).returncode
+    # frozen：没有解释器 → 进程内调用（模块已随 exe 打包）
+    import importlib
+    import io
+    import traceback
+    buf = io.StringIO() if capture else None
+    old = (sys.stdout, sys.stderr) if buf is not None else None
+    if old:
+        sys.stdout = sys.stderr = buf
+    try:
+        # import 也放进 try：子脚本**模块顶层**出错（如自己调 stdout.reconfigure）
+        # 要跟子进程里一样得到「traceback + 退出码 1」，而不是把调用方整个炸掉。
+        mod = importlib.import_module(script[:-3] if script.endswith(".py") else script)
+        rc = mod.main(list(args))
+    except SystemExit as e:                       # 子脚本个别处若调了 exit()：当退出码
+        rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+    except Exception:
+        traceback.print_exc()                     # 与子进程的 stderr traceback 对齐
+        rc = 1
+    finally:
+        if old:
+            sys.stdout, sys.stderr = old
+    if buf is not None:
+        return rc, buf.getvalue()
+    return rc
 
 
 # ---------------------------------------------------------------- 自检
@@ -224,6 +348,20 @@ def _selftest():
     assert parse_contest("随便写的") == (None, None)
     assert parse_contest("") == (None, None)
     assert parse_contest(None) == (None, None)
+
+    # 垃圾过滤：目录名命中整棵跳过、后缀命中剔；真源码一律留
+    assert is_junk("B\\_work\\tmp.txt")
+    assert is_junk("__pycache__\\a.pyc")
+    assert is_junk("B\\b.exe")
+    assert is_junk("B\\图.png")
+    assert is_junk("B\\b.cpp.bak")
+    assert is_junk("B\\b.orig")
+    assert is_junk("B\\b.cpp~")
+    assert not is_junk("B\\b.cpp")
+    assert not is_junk("B\\verify_b.py")
+    assert not is_junk("B\\samples.py")
+    assert not is_junk("Round163题解.md")
+    assert not is_junk("专题\\例子分析器.py")
     print("toolutil 自检 OK")
 
 

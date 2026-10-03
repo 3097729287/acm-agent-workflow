@@ -324,7 +324,8 @@ def check_compile(text, rep, tmpdir):
             f.write(code)
         r = subprocess.run(["g++", "-O2", "-std=c++17", "-Wall", "-Wextra",
                             "-o", exe, p],
-                           capture_output=True, text=True, timeout=300)
+                           capture_output=True, text=True, timeout=300,
+                           encoding="utf-8", errors="replace")
         if r.returncode != 0:
             bad.append("  第 %d 个代码块（md 第 %d 行起）编译失败：\n%s"
                        % (i, ln, "\n".join("      " + x for x in

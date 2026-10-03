@@ -171,7 +171,8 @@ def compile_cpp(src, exe=None):
     exe = exe or (os.path.splitext(src)[0] + ".exe")
     cmd = ["g++"] + GXX_FLAGS + ["-o", exe, src]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                           encoding="utf-8", errors="replace")
     except OSError:
         raise RuntimeError(
             "PATH 里找不到 g++ —— 装一个（Windows 走 MSYS2 的 ucrt64\\bin 加进 PATH，"

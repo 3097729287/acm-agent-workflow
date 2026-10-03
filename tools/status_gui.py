@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""status_gui.py —— 题目状态跟踪窗口 v12（tkinter，纯标准库）
+r"""status_gui.py —— 题目状态跟踪窗口 v13（tkinter，纯标准库）
 
 用法：
     pythonw status_gui.py                     # 打开窗口（默认读 <数据根>/题解/题目状态.md）
@@ -19,7 +19,7 @@ r"""status_gui.py —— 题目状态跟踪窗口 v12（tkinter，纯标准库�
             行里的题换成别的；越界贴最后一行）；搜索才「跟题」（按 场次 + 题号）
             改完状态（回车确认 / 数字直选）选中行自动下移一行；浮层按 Esc 取消则不移动
             选中行直接按 1~6 = 改状态（不开浮层），v12 起；焦点在搜索框时数字照常打进输入框
-    Tab / Shift+Tab 在「主页面 / 搜索」两个焦点之间轮换（v9；其余控件 takefocus 全关）
+    Tab / Shift+Tab 在「主页面 / 搜索 / 知识点 / 难度 / 状态」五个焦点之间轮换（v13；其余控件 takefocus 全关）
     ← / → 在一整条横排上左右走：总表 → 1 待重写 → 2 待补题 → 3 复习 → 4 抽检，两头绕回（v6）
     / 搜索 ｜ Esc 从搜索框回主页面（搜索框里先清空）
     搜索框里 Enter / ↓ = 跳回总表看结果（v5：搜索词保留）
@@ -150,6 +150,43 @@ v12（2026-10-03）：
     ④ **搜索加难度**：`visible_rows` 的拼串多接一节 难度 —— `1800` / `CF1800` / `cf 1800`
       等价，大小写 / 空格规则照旧（忽略空格 + 多词都要命中）。
 
+v13（2026-10-03 批次 C）：
+    ① **筛选区**（窗口第二行，在「搜索 + 统计 + 消息」那一行下面）= `筛选` 标签 +
+      知识点框 + 难度框 + 6 个状态小按钮（可多选）+ `清空` + 最右端 `筛出 N 题`。
+      三个条件 AND、**只作用于总表**（跟搜索一个口径，不影响看板）；日期 / 题名不参与。
+      **匹配逻辑一律走 `status_report.filter_rows`**（拆词走 `SR.split_terms` /
+      `SR.difficulty_specs`），本文件不另写一套规则 —— 命令行
+      `python tools/status_report.py --todo --knowledge DP` 与 GUI 同条件必然同一份结果
+      （冒烟 (zz) 拿子进程真跑命令行比过命中集合）。
+      · 知识点 = 任一词在知识点列里出现即命中（子串、忽略空白大小写：`区间dp` ≡ `区间 DP`）；
+        多个词用逗号分隔、取并集（`DP,动态规划` —— 不查词典、不做同义扩展）；
+      · 状态 = ∈ 选中的那几个（一个都没选 = 不按状态筛）；
+      · 难度 = CF 数字，`1500` / `1200-1600` / `<=1400` / `>=1800`；认不出的写法
+        **一条都不匹配**并在 `筛出 N 题` 后面点名（跟命令行的 `★` 同一口径）。
+      筛选开着时右端显示 `筛出 N 题`（N = 当前可见行数 = 筛选 ∧ 搜索的交集）；清空后
+      这行字消失 —— v10 删掉的常驻「搜出 M 题」不复活。
+    ② **端点**：两个筛选框里 Esc = 清掉这一格 + 回表格、Enter / ↓ = 带条件跳回总表
+      （跟搜索框同风格）；状态按钮上 ← / → 在 6 个按钮里走、空格 / Enter 选中 / 取消、
+      Esc 回表格。
+    ③ **Tab 轮换变 5 站**：主页面 → 搜索 → 知识点 → 难度 → 状态组（整组算一站，组内
+      用 ← / → 走；Shift+Tab 反向）—— v9 / v6 的两站口径作废。输入法守卫的 keep 名单
+      同步收进两个新输入框（v8 规则不变：在表 / 清单上按键不弹输入法）。
+    （v9 删的是「状态筛选下拉框」那一套；v13 不是把它搬回来：没有下拉、没有 `F` 键，
+      也没有新的状态取值 —— 是输入框 + 多选按钮 + 与命令行共用一份匹配实现。）
+v13（2026-10-03 批次 B）：
+    **题解包三个文件级入口**（菜单栏「题解包」；只动菜单 / 入口区，不碰搜索筛选区）：
+      ① 导入题解包…：选 zip / 已解压的目录 → 后台跑 `import_solution` dry（不写盘）→
+         弹报告窗口；校验全过（退出码 0）才出现「应用到数据根」按钮，按了才真 `--apply`
+         （落盘后自动刷新本窗口的表格）。
+      ② 导出题解包…：选场次（状态表里「牛客周赛 Round N」形式）+ 可选题号 → 生成
+         题解包 zip（默认存桌面）。
+      ③ 一键校验…：同 ① 的 dry，但只出报告、不给落盘按钮。
+      任务跑在后台线程（界面不卡；同一时刻只允许一个包任务）。执行走**进程内调用**
+      （不是子进程）—— PyInstaller 打的 exe（frozen）里没有解释器可用，两种环境
+      统一这条路径（子齿轮由 `toolutil.run_sibling` 在 frozen 下同样进程内化）。
+      无窗口命令行版（CI / 自动化）：`--pack-import <包> [--apply]` /
+      `--pack-check <包>` / `--pack-export Round163[-G] [-o 出.zip] [--log 日志]`。
+
 记住上次（v4）：
     关窗时把 窗口大小 + 位置 + 排序字段 + 升/降序 存成脚本同目录的 `status_gui.config.json`
     （纯 LF、UTF-8、键用小写英文）；下次打开照上次来，文件没有 / 读不动 / 值不对就回默认。
@@ -174,15 +211,18 @@ import hashlib
 import io
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
 import tempfile
+import threading
+import traceback
 
 sys.dont_write_bytecode = True          # 只读地 import 工具目录：绝不往那儿写 __pycache__
 
 import tkinter as tk
-from tkinter import ttk, font as tkfont, messagebox
+from tkinter import ttk, filedialog, font as tkfont, messagebox
 
 
 def _load_tool(name):
@@ -207,10 +247,10 @@ HEADER = list(NEW_HEADER)
 
 SORTABLE = ("场次", "难度", "日期")              # 可排序的三列（v3 起取消「知识点」）
 KEY_TABLE = """\
-Tab / Shift+Tab    在 主页面 / 搜索 之间轮换焦点
+Tab / Shift+Tab    焦点轮换：主页面 → 搜索 → 知识点 → 难度 → 状态（Shift+Tab 反向）
 ← / →              横着走：总表 → 1 待重写 → 2 待补题 → 3 复习 → 4 抽检，两头绕回
 /                  跳到搜索框
-Esc                从搜索框回主页面（搜索框里先清空）
+Esc                从搜索框 / 筛选框回主页面（框里先清空）
 ↑ ↓                移动选中行
 PgUp / PgDn        翻页
 1 ~ 6              选中行直接改状态（不开浮层）
@@ -221,7 +261,9 @@ Ctrl+Z             撤销上一步改动（可连撤，本窗口内）
 S / R              换排序字段 / 反转升降序（总表页）
 F5                 从磁盘重读
 F11                全屏开关（再按一次退出）
-?                  快捷键一览"""                   # 与 说明.md 的键位表一字不差（v12：15 行；裸 F 那行随 v9 筛选删除，F5 / F11 不算）
+?                  快捷键一览
+筛选区             知识点 / 难度 框 + 状态按钮：多条件组合，只筛总表 ｜ 清空 = 全清
+状态按钮上          ← / → 换按钮 ｜ 空格 / Enter 选中 / 取消 ｜ Esc 回表格"""                   # 与 说明.md 的键位表一字不差（v13：17 行；裸 F 那行随 v9 筛选删除，F5 / F11 不算）
 TODAY_COLS = ["场次", "题号", "题名", "知识点", "难度", "日期"]
 EDITABLE = ("状态", "日期")                      # 唯一允许改的两格
 CELL_STATE = HEADER.index("状态")
@@ -235,6 +277,61 @@ CONFIG_NAME = "status_gui.config.json"          # 「记住上次」的配置文
 TOAST_MS = 3000                                 # 底部保存提示 3 秒后自动消失
 UNDO_MAX = 50                                   # v12：Ctrl+Z 撤销栈容量（多步；只在内存、不跨重启）
 DATA_ROOT = toolutil.DATA_ROOT                      # v6 追加：资料查找的根（算法库记录 / 场题解），测试里可换沙箱
+
+
+# ================================================================ 题解包（v13）
+# 三入口（菜单「导入 / 导出 / 一键校验」）的纯逻辑都在这一节 —— 不开窗口、不碰磁盘，
+# selftest 直接断言；真正的执行在 StatusGui 的方法与 pack_cli()（无窗口命令行入口）里。
+PACK_MENU_LABEL = "题解包"
+PACK_IMPORT_LABEL = "导入题解包…"
+PACK_EXPORT_LABEL = "导出题解包…"
+PACK_CHECK_LABEL = "一键校验…"
+
+
+def pack_import_argv(pack, root, apply_=False):
+    """「导入题解包」→ import_solution.main 的参数列表（dry 或 --apply）。"""
+    argv = [pack]
+    if apply_:
+        argv.append("--apply")
+    argv += ["--root", root]
+    return argv
+
+
+def pack_export_argv(target, out, root):
+    """「导出题解包」→ export_solution.main 的参数列表；out 为空 = 用工具的默认命名。"""
+    argv = [target]
+    if out:
+        argv += ["-o", out]
+    argv += ["--root", root]
+    return argv
+
+
+def pack_verdict(rc, applied):
+    """导入跑完的（退出码, 是否 --apply）→（还能不能「应用到数据根」, 状态行文案）。"""
+    if rc == 0:
+        if applied:
+            return False, "导入完成 —— 文件 / 索引 / 状态表 / 台账四处都对上了"
+        return True, "校验通过 —— 可以应用到数据根"
+    if rc == 1:
+        return False, "包里有不合格项（看上面的「问题」清单），改完再来"
+    return False, "包不可读或参数不对（看上面的报错）"
+
+
+def pack_round_choices(rows):
+    """状态表行 → 可导出的场次列表（「牛客周赛 Round N」形式，按场次号降序）。
+
+    export_solution 目前只认牛客周赛（别的比赛等通用化批次），筛选口径跟它一致。
+    """
+    seen, out = set(), []
+    for r in rows:
+        s = r.get("场次", "")
+        name, _n = toolutil.parse_contest(s)
+        if name == "牛客周赛" and s not in seen:
+            seen.add(s)
+            out.append(s)
+    out.sort(key=round_num, reverse=True)
+    return out
+
 
 # 统一配色：浅底 + 一个强调色
 C_BG = "#f4f6fb"
@@ -282,8 +379,14 @@ DEFAULT_CFG = {"geometry": "", "sort_col": "场次", "sort_desc": False}
 
 
 def config_path_default():
-    """「记住上次」的配置文件 = 脚本同目录的 status_gui.config.json。"""
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_NAME)
+    """「记住上次」的配置文件 = 脚本同目录的 status_gui.config.json。
+
+    frozen（exe）下脚本在一个**一次性临时解包目录**里 —— 写那儿等于每次开窗都丢；
+    跟着 exe 走（`toolutil.REPO_ROOT` 在 frozen 下就是 exe 所在目录）。
+    """
+    d = (toolutil.REPO_ROOT if getattr(sys, "frozen", False)
+         else os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(d, CONFIG_NAME)
 
 
 def _geometry_ok(g, sw=None, sh=None):
@@ -858,6 +961,7 @@ class StatusGui(object):
         self._undo_stack = []                # v12：Ctrl+Z 撤销栈（多步；只在内存、不跨重启）
         self._last_change = None             # v6~v11：只记一步 → v12 起 = 栈顶那份（栈空即 None）
         self.last_windowed_geometry = None   # v11：进全屏前记下的窗口态 geometry（全屏中关窗存这份）
+        self._pack_job = None                # v13：正在跑的题解包后台任务（同时只许一个）
 
         root.title("题目状态跟踪表")
         root.geometry("1320x800")
@@ -866,7 +970,9 @@ class StatusGui(object):
         self.fam = self._pick_family()
         self._init_style()
 
+        self._make_menu()                   # v13：菜单栏（题解包：导入 / 导出 / 一键校验）
         self._make_head()                   # v9：第一行 = 搜索 + 统计 + 消息（页头两行 / 底部行都删了）
+        self._make_filter_bar()             # v13：第二行 = 筛选区（知识点 / 状态 / 难度）
 
         self.nb = ttk.Notebook(root, takefocus=0)   # v6：页签不进 Tab 轮换（鼠标点不受影响）
         self.nb.pack(fill="both", expand=True, padx=12, pady=(2, 4))
@@ -877,7 +983,7 @@ class StatusGui(object):
         self._make_all_tab()
         self._make_today_tab()
 
-        # v9：Tab / Shift+Tab = 两站焦点轮换（主页面 ⇄ 搜索框；见 _rotate_focus）
+        # v13：Tab / Shift+Tab = 五站焦点轮换（主页面 → 搜索 → 知识点 → 难度 → 状态；见 _rotate_focus）
         root.bind("<Tab>", lambda e: self._rotate_focus(1))
         root.bind("<Shift-Tab>", lambda e: self._rotate_focus(-1))
         # v6 追加：Ctrl+Z 撤销挂 root —— 任何焦点下都生效（Entry 没有自己的 Ctrl+Z，不会打架）。
@@ -904,7 +1010,8 @@ class StatusGui(object):
         self.tree.focus_set()
         # v8：输入法守卫 —— 只留搜索框收中文，其余（总表 / 清单 / 浮层 / 一览…）一律摘掉输入法；
         # win32 之外 / 拿不到 imm32 / 任何异常都静默降级，窗口行为与 v7 完全一致（见 ImeGuard）。
-        self.ime = ImeGuard(root, keep=(self.ent_search,))
+        # v13：筛选区那两个输入框也收中文（keep 名单跟着 _in_text_widget 一起扩）。
+        self.ime = ImeGuard(root, keep=(self.ent_search, self.ent_know, self.ent_diff))
         self.ime.install()
 
     # ------------------------------------------------------------ 配置 / 关窗
@@ -1052,6 +1159,151 @@ class StatusGui(object):
         self.lbl_msg.pack(side="right")                         # v9：消息挪到这一行最右端
         # v5 那条常驻快捷键提示（「按 ? 看快捷键」…）早已删；v9 把计数行并进这一行、
         # 消息挪到最右端（原底部行删除），并删掉状态筛选（下拉框 + F 键）。
+
+    # ------------------------------------------------------------ 筛选区（v13）
+    def _make_filter_bar(self):
+        """v13：窗口第二行 = 筛选区（知识点框 + 难度框 + 6 个状态按钮 + 清空 + 筛出计数）。
+
+            匹配逻辑一律走 `status_report.filter_rows`（见 `filter_state()`）——命令行
+        `status_report.py --knowledge/--status/--todo/--difficulty` 与这里同条件必同一结果，
+        本文件不另写一套规则。只作用于总表（跟搜索一个口径，不影响看板）。
+        三个条件各自是「并集」逻辑：知识点逗号分隔多个词 / 状态多选 / 难度多值，都是任一命中。
+
+        焦点：两个输入框 + 状态组要进 Tab 轮换（`_focus_ring`），但**不用 takefocus** ——
+        窗口里 Tab 一律由 root 那个处理显式轮换并 `return "break"`，其余控件 takefocus 全关
+        （跟 v9 的两站口径同一个做法）。
+        """
+        bar = tk.Frame(self.root, bg=C_BG)
+        bar.pack(fill="x", padx=16, pady=(0, 2))
+        self.filter_bar = bar
+        f13 = (self.fam, 13)
+
+        tk.Label(bar, text="筛选", bg=C_BG, fg=C_TEXT, font=f13).pack(side="left")
+        tk.Label(bar, text="知识点", bg=C_BG, fg=C_MUTED, font=f13).pack(side="left", padx=(10, 4))
+        self.var_know = tk.StringVar(value="")
+        self.ent_know = ttk.Entry(bar, textvariable=self.var_know, width=10, font=f13,
+                                  style="Nav.TEntry", takefocus=0)
+        self.ent_know.pack(side="left")
+        tk.Label(bar, text="难度", bg=C_BG, fg=C_MUTED, font=f13).pack(side="left", padx=(10, 4))
+        self.var_diff = tk.StringVar(value="")
+        self.ent_diff = ttk.Entry(bar, textvariable=self.var_diff, width=10, font=f13,
+                                  style="Nav.TEntry", takefocus=0)
+        self.ent_diff.pack(side="left")
+        for ent, var in ((self.ent_know, self.var_know), (self.ent_diff, self.var_diff)):
+            ent.bind("<KeyRelease>", lambda e: self.refresh_view())
+            ent.bind("<Return>", self._jump_to_table)           # 跟搜索框同风格：带条件跳回总表
+            ent.bind("<Down>", self._jump_to_table)
+            ent.bind("<Escape>", lambda e, v=var: self._esc_filter_entry(v))
+
+        tk.Label(bar, text="状态", bg=C_BG, fg=C_MUTED, font=f13).pack(side="left", padx=(10, 4))
+        self.status_on = set()                                  # 选中的状态（空 = 不按状态筛）
+        self.chip_btns = []
+        for st in STATES:
+            b = tk.Button(bar, text=st, font=(self.fam, 11), bd=0, relief="flat",
+                          padx=8, cursor="hand2", takefocus=0,
+                          highlightthickness=1, highlightbackground=C_LINE, highlightcolor=C_ACCENT,
+                          bg=C_PANEL, fg=C_TEXT, activebackground=C_ACCENT_LIGHT,
+                          activeforeground=C_TEXT,
+                          command=lambda s=st: self._toggle_status(s))
+            b.pack(side="left", padx=(4, 0))
+            b.bind("<space>", lambda e, s=st: self._toggle_status(s))   # return "break"：别让按钮类绑定再触发一次
+            b.bind("<Return>", lambda e, s=st: self._toggle_status(s))
+            b.bind("<KP_Enter>", lambda e, s=st: self._toggle_status(s))
+            b.bind("<Left>", lambda e: self._chip_move(-1))
+            b.bind("<Right>", lambda e: self._chip_move(1))
+            b.bind("<Escape>", self._esc_filter_to_table)
+            self.chip_btns.append(b)
+
+        self.btn_clear = tk.Button(bar, text="清空", font=(self.fam, 11), bd=0, relief="flat",
+                                   padx=8, cursor="hand2", takefocus=0,
+                                   highlightthickness=1, highlightbackground=C_LINE,
+                                   bg=C_BG, fg=C_MUTED, activebackground=C_ACCENT_LIGHT,
+                                   command=self._clear_filters)
+        self.btn_clear.pack(side="left", padx=(12, 0))
+
+        self.var_hits = tk.StringVar(value="")
+        self.lbl_hits = tk.Label(bar, textvariable=self.var_hits, bg=C_BG, fg=C_ACCENT_DARK,
+                                 font=(self.fam, 11), anchor="e")
+        self.lbl_hits.pack(side="right")                        # 只在筛选开着时才有字
+
+    def filter_state(self):
+        """筛选区当前状态 → (kwargs, raw_diff, bad)。
+
+        kwargs 直接喂 `status_report.filter_rows`（两端唯一实现）；raw_diff = 难度框拆出的
+        原文词表（原样显示用）；bad = 认不出的难度写法（这些一条都不匹配，要跟命令行的
+        `★` 一样点名）。
+        """
+        know = [t for x in (self.var_know.get(),) for t in SR.split_terms(x)]
+        raw = SR.split_terms(self.var_diff.get())
+        specs, bad = SR.difficulty_specs(raw)
+        return ({"knowledge": know,
+                 "statuses": [s for s in STATES if s in self.status_on],
+                 "difficulty": specs}, raw, bad)
+
+    def _filter_on(self):
+        """筛选有没有开着（任意一项非空就算；写法认不出的难度也算开着）。"""
+        kw, _raw, _bad = self.filter_state()
+        return bool(kw["knowledge"] or kw["statuses"] or kw["difficulty"])
+
+    def _toggle_status(self, st):
+        """状态小按钮：点一下选中 / 再点取消。回 "break" —— 空格键别让按钮类绑定再触发一次。"""
+        self.status_on.symmetric_difference_update({st})
+        self._paint_chips()
+        self.refresh_view()
+        return "break"
+
+    def _paint_chips(self):
+        """按选中态重画 6 个状态按钮（选中 = 强调色底白字）。"""
+        for b, st in zip(self.chip_btns, STATES):
+            on = st in self.status_on
+            b.configure(bg=C_ACCENT if on else C_PANEL,
+                        fg="#ffffff" if on else C_TEXT,
+                        activebackground=C_ACCENT_DARK if on else C_ACCENT_LIGHT)
+
+    def _clear_filters(self):
+        """清空筛选区（两个框 + 全部状态按钮）——回到「不筛」，总表恢复全量。"""
+        self.var_know.set("")
+        self.var_diff.set("")
+        self.status_on.clear()
+        self._paint_chips()
+        self.refresh_view()
+        return "break"
+
+    def _chip_move(self, delta):
+        """状态按钮上按 ← / →：在 6 个按钮里走（组内导航；整组在 Tab 环里算一站）。"""
+        cur = self._focus_widget()
+        if cur not in self.chip_btns:
+            return "break"
+        i = self.chip_btns.index(cur)
+        self.chip_btns[(i + delta) % len(self.chip_btns)].focus_set()
+        return "break"
+
+    def _esc_filter_to_table(self, event=None):
+        """筛选区里按 Esc = 回表格（输入框那条会先清掉自己那一格，见 _esc_filter_entry）。"""
+        self._active_tree().focus_set()
+        return "break"
+
+    def _esc_filter_entry(self, var, event=None):
+        """筛选输入框里按 Esc：清掉这一格 + 回表格（跟搜索框那条同风格）。"""
+        var.set("")
+        self.refresh_view()
+        self._active_tree().focus_set()
+        return "break"
+
+    def update_hits(self, n):
+        """筛选区右端的 `筛出 N 题`：只在筛选开着时有字（N = 当前总表可见行数）。
+
+        这行字属于筛选区，清空就消失 —— v10 删掉的常驻「搜出 M 题」不复活。
+        写法认不出的难度在这里点名（跟命令行的 `★` 同一口径）。
+        """
+        if not self._filter_on():
+            self.var_hits.set("")
+            return
+        s = "筛出 %d 题" % n
+        _kw, _raw, bad = self.filter_state()
+        if bad:
+            s += "（难度写法不认：%s）" % "、".join(bad)
+        self.var_hits.set(s)
 
     # ------------------------------------------------------------ 总表页
     def _make_all_tab(self):
@@ -1205,22 +1457,26 @@ class StatusGui(object):
         self.var_msg.set("")
 
     def visible_rows(self):
-        """总表当前该显示的行：只有搜索能藏行（v9：状态筛选整块删除）。
+        """总表当前该显示的行 = **筛选区（v13）∧ 搜索（v10 规则）**。
 
-        v10 搜索规则 = **忽略空格 + 多词都要命中**：查询按空白切词（半角 / 全角空格都算），
+        筛选走 `status_report.filter_rows` —— 命令行 `--knowledge / --status / --todo /
+        --difficulty` 与 GUI 共用同一份实现（两端同条件必然同一份结果，冒烟 (zz) 真跑 CLI 比过）。
+        v10 搜索规则照旧 = **忽略空格 + 多词都要命中**：查询按空白切词（半角 / 全角空格都算），
         每个词都要命中才显示；比对前把「场次 + 题名 + 知识点 + 难度」拼起来、去掉所有空白、转小写
         （v12：拼串加了 难度 —— 搜 `1800` / `CF1800` / `cf 1800` 等价）
         —— 所以「牛客周赛Round」与「牛客周赛 Round」命中集合完全相同，跨列组合（「牛客 构造」）
         也能中，大小写不敏感。
         """
+        kw, _raw, _bad = self.filter_state()
+        out = SR.filter_rows(self.rows, **kw)
         words = self.var_search.get().split()
-        out = []
-        for r in self.rows:
-            if words:
+        if words:
+            keep = []
+            for r in out:
                 hay = re.sub(r"\s+", "", r["场次"] + r["题名"] + r["知识点"] + r["难度"]).lower()   # v12：加难度
-                if not all(w.lower() in hay for w in words):
-                    continue
-            out.append(r)
+                if all(w.lower() in hay for w in words):
+                    keep.append(r)
+            out = keep
         return sort_rows(out, self.sort_col, self.sort_desc)
 
     def _head_text(self, col):
@@ -1251,6 +1507,7 @@ class StatusGui(object):
         for h in HEADER:
             tree.heading(h, text=self._head_text(h))
         self.update_count()
+        self.update_hits(len(rows))         # v13：筛选区右端的「筛出 N 题」
         if keep_index is not None:
             self._select_index(tree, keep_index)
         elif keep:
@@ -1416,12 +1673,14 @@ class StatusGui(object):
         进段时 show_segment 会把强调色 / 清单 / 选中行（v10：本段上次那行，没记过就是第 1 行）/
         焦点一并弄好；进「今天要做的」不记上次在哪段（往前第 1 段、往后第 4 段）。
 
-        防冲突（v5 的规则原样保留；v9 起筛选删除，只剩搜索框这一处）：
-          * 焦点在搜索框里时**不抢** —— return None（不 break），那儿的 ← / → 归 Entry 自己挪光标；
+        防冲突（v5 的规则原样保留；v13 起让位对象 = 三个输入框…）：
+          * 焦点在搜索框 / 筛选区两个输入框里时**不抢** —— return None（不 break），那儿的
+            ← / → 归 Entry 自己挪光标；
+          * 焦点在筛选区状态按钮上时也不抢（那条横排由按钮自己处理：组内 ← / → 换按钮）；
           * 状态浮层 / `?` 一览打开时不响应（_busy）；
           * 表格 / 清单里 ← / → 没有别的用途，直接绑。
         """
-        if self._busy() or self._in_text_widget():
+        if self._busy() or self._in_text_widget() or self._focus_widget() in self.chip_btns:
             return None
         self._remember_today_sel()          # v10：切走前先把本段当前选中行记下来
         if self.nb.index(self.nb.select()) == 0:
@@ -1442,19 +1701,34 @@ class StatusGui(object):
             self.show_segment(cell - 1)          # 强调色 / 清单 / 选中行 / 焦点都在这里面
         return "break"
 
-    def _rotate_focus(self, delta, event=None):
-        """v9：Tab / Shift+Tab 只在两个焦点之间轮换：主页面 ⇄ 搜索框。
+    def _focus_ring(self):
+        """v13：Tab 轮换的一圈（5 站）= 当前页表格 / 搜索框 / 知识点框 / 难度框 / 状态组。
 
-        只有这两个控件收键盘焦点（其余控件 takefocus 全关，见各处构造参数）：
-        「主页面」= 当前页的表格 / 清单（总表页→总表树、看板页→看板清单）。
-        焦点跑去别处（理论上不该有）时按「主页面」算。浮层 / 一览开着时不响应。
-        Tab 的默认遍历不会跑：这个 root 级处理 return "break"（v2~v4 的 Tab 切页就是靠它压住的）。
+        「主页面」= 当前页的表格 / 清单（总表页→总表树、看板页→看板清单）；状态组（6 个
+        按钮）**整组算一站**（组内用 ← / → 走）。v9 的两站口径作废。
+        """
+        return [self._active_tree(), self.ent_search, self.ent_know, self.ent_diff,
+                self.chip_btns[0]]
+
+    def _rotate_focus(self, delta, event=None):
+        """Tab / Shift+Tab：在 `_focus_ring()` 那一圈上正 / 反向轮换（v6 三站 → v9 两站 → v13 五站）。
+
+        焦点在状态组里任何一个按钮上时按整组算；跑去别处（理论上不该有）时贴回第一站。
+        浮层 / 一览开着时不响应。Tab 的默认遍历不会跑：这个 root 级处理 return "break"
+        （v2~v4 的 Tab 切页就是靠它压住的）；窗口里 Tab 只有这一处。
         """
         if self._busy():
             return None
+        ring = self._focus_ring()
         cur = self._focus_widget()
-        nxt = self._active_tree() if cur is self.ent_search else self.ent_search
-        nxt.focus_set()
+        if cur in self.chip_btns:
+            i = ring.index(self.chip_btns[0])
+        elif cur in ring:
+            i = ring.index(cur)
+        else:
+            ring[0].focus_set()
+            return "break"
+        ring[(i + delta) % len(ring)].focus_set()
         return "break"
 
     def _open_material(self, event=None):
@@ -1556,8 +1830,8 @@ class StatusGui(object):
             return None
 
     def _in_text_widget(self):
-        """焦点是不是在「要收普通字符」的控件里（只有搜索框了，v9 起）——那时快捷键让位。"""
-        return self._focus_widget() is self.ent_search
+        """焦点是不是在「要收普通字符」的控件里（v13：搜索框 + 筛选区两个输入框）——那时快捷键让位。"""
+        return self._focus_widget() in (self.ent_search, self.ent_know, self.ent_diff)
 
     def _busy(self):
         return self.popup is not None or self.help_win is not None
@@ -1568,8 +1842,8 @@ class StatusGui(object):
         return "break"
 
     def _on_focus_search(self, event=None):
-        if self._busy() or self._focus_widget() is self.ent_search:
-            return None                             # 已在搜索框里：让 / 当普通字符打进去
+        if self._busy() or self._in_text_widget():
+            return None                             # 已在输入框里：让 / 当普通字符打进去
         return self.focus_search()
 
     def _esc_search(self, event=None):
@@ -1968,6 +2242,335 @@ class StatusGui(object):
             self.nb.select(0)
         self.select_key(key, focus=True)
 
+    # ------------------------------------------------------------ 题解包（v13）
+    def _make_menu(self):
+        """菜单栏：`题解包` → 导入题解包… / 导出题解包… / ── / 一键校验…（v13 三入口）。
+
+        入口只在这里出现（不占快捷键 —— 键位表 KEY_TABLE 与说明 md 逐字同步，别动那两处）。
+        """
+        menubar = tk.Menu(self.root, tearoff=0)   # tearoff=0：菜单栏里别混进一条「撕下」项
+        m = tk.Menu(menubar, tearoff=0)
+        m.add_command(label=PACK_IMPORT_LABEL, command=lambda: self.pack_flow("import"))
+        m.add_command(label=PACK_EXPORT_LABEL, command=self.pack_export_dialog)
+        m.add_separator()
+        m.add_command(label=PACK_CHECK_LABEL, command=lambda: self.pack_flow("check"))
+        menubar.add_cascade(label=PACK_MENU_LABEL, menu=m)
+        self.root.config(menu=menubar)
+
+    def pack_flow(self, mode):
+        """「导入题解包…」/「一键校验…」：选包 → 后台 dry → 报告窗。
+
+        import 模式报告窗多一个「应用到数据根」按钮（dry 通过才亮）；check 模式只出报告。
+        """
+        if self._pack_job is not None:
+            self.set_msg("已有题解包任务在跑，等它结束", clear_after=TOAST_MS)
+            return
+        pack = self._ask_pack_path()
+        if not pack:
+            return
+        title = PACK_IMPORT_LABEL.rstrip("…") if mode == "import" else PACK_CHECK_LABEL.rstrip("…")
+        win, text, status, btn = self._open_pack_report(
+            title, "包：%s" % pack, allow_apply=(mode == "import"))
+        self._pack_report_append(text, "正在校验 %s ……\n" % pack)
+        self._start_pack_job(kind="import", pack=pack,
+                             argv=pack_import_argv(pack, self.data_root, False),
+                             win=win, text=text, status=status, btn=btn)
+
+    def _ask_pack_path(self):
+        """选包对话框（zip 或解压后的目录二选一）。返回路径；取消 = None。"""
+        win = tk.Toplevel(self.root)
+        win.title("选择题解包")
+        win.configure(bg=C_BG)
+        win.transient(self.root)
+        win.resizable(False, False)
+        var = tk.StringVar()
+        body = tk.Frame(win, bg=C_BG)
+        body.pack(fill="both", expand=True, padx=16, pady=(14, 4))
+        tk.Label(body, text="题解包（.zip 或解压后的目录）：", bg=C_BG, fg=C_TEXT,
+                 font=(self.fam, 13)).grid(row=0, column=0, columnspan=3, sticky="w")
+        ent = ttk.Entry(body, textvariable=var, width=48, font=(self.fam, 13))
+        ent.grid(row=1, column=0, columnspan=2, sticky="we", pady=(6, 0))
+
+        def pick(kind):
+            if kind == "zip":
+                p = filedialog.askopenfilename(parent=win, title="选择题解包（zip）",
+                                               filetypes=[("题解包", "*.zip"), ("全部文件", "*.*")])
+            else:
+                p = filedialog.askdirectory(parent=win, title="选择题解包（目录）")
+            if p:
+                var.set(os.path.normpath(p))
+
+        ttk.Button(body, text="选 zip…", command=lambda: pick("zip")).grid(
+            row=1, column=2, sticky="w", padx=(8, 0), pady=(6, 0))
+        ttk.Button(body, text="选目录…", command=lambda: pick("dir")).grid(
+            row=2, column=2, sticky="w", padx=(8, 0))
+        out = {"path": None}
+
+        def ok(*_e):
+            p = var.get().strip().strip('"')
+            if not p:
+                return
+            out["path"] = os.path.normpath(p)
+            win.destroy()
+
+        btns = tk.Frame(win, bg=C_BG)
+        btns.pack(fill="x", padx=16, pady=(8, 14))
+        ttk.Button(btns, text="开始", command=ok).pack(side="right")
+        ttk.Button(btns, text="取消", command=win.destroy).pack(side="right", padx=(0, 8))
+        ent.bind("<Return>", ok)
+        win.bind("<Escape>", lambda _e: win.destroy())
+        self._center_on_root(win)
+        ent.focus_set()
+        win.grab_set()
+        win.wait_window()
+        return out["path"]
+
+    def pack_export_dialog(self):
+        """「导出题解包…」：选场次（可选题号 = 单题包）→ 输出 zip → 后台导出，报告进报告窗。"""
+        if self._pack_job is not None:
+            self.set_msg("已有题解包任务在跑，等它结束", clear_after=TOAST_MS)
+            return
+        rounds = pack_round_choices(self.rows)
+        if not rounds:
+            self._error("导出题解包", "状态表里没有「牛客周赛 Round N」形式的场次。")
+            return
+        win = tk.Toplevel(self.root)
+        win.title(PACK_EXPORT_LABEL.rstrip("…"))
+        win.configure(bg=C_BG)
+        win.transient(self.root)
+        win.resizable(False, False)
+        body = tk.Frame(win, bg=C_BG)
+        body.pack(fill="both", expand=True, padx=16, pady=(14, 4))
+        tk.Label(body, text="场次", bg=C_BG, fg=C_TEXT, font=(self.fam, 13)).grid(row=0, column=0, sticky="w")
+        cb = ttk.Combobox(body, values=rounds, state="readonly", width=24, font=(self.fam, 13))
+        cb.set(rounds[0])
+        cb.grid(row=0, column=1, sticky="w", padx=(8, 16))
+        tk.Label(body, text="题号（空 = 整场）", bg=C_BG, fg=C_TEXT,
+                 font=(self.fam, 13)).grid(row=0, column=2, sticky="w")
+        ent_letter = ttk.Entry(body, width=6, font=(self.fam, 13))
+        ent_letter.grid(row=0, column=3, sticky="w", padx=(8, 0))
+        tk.Label(body, text="输出 zip", bg=C_BG, fg=C_TEXT,
+                 font=(self.fam, 13)).grid(row=1, column=0, sticky="w", pady=(10, 0))
+        var_out = tk.StringVar()
+        ent_out = ttk.Entry(body, textvariable=var_out, width=48, font=(self.fam, 13))
+        ent_out.grid(row=1, column=1, columnspan=3, sticky="we", padx=(8, 0), pady=(10, 0))
+
+        def default_out(*_e):
+            name, n = toolutil.parse_contest(cb.get())
+            if not name or not n:
+                return
+            letter = ent_letter.get().strip().upper()
+            var_out.set(os.path.join(os.path.expanduser("~"), "Desktop",
+                                     "%sRound%d%s.zip" % (name, n, ("-" + letter) if letter else "")))
+
+        def save_as():
+            p = filedialog.asksaveasfilename(parent=win, title="题解包另存为",
+                                             defaultextension=".zip",
+                                             initialfile=os.path.basename(var_out.get() or "pack.zip"),
+                                             filetypes=[("题解包", "*.zip")])
+            if p:
+                var_out.set(os.path.normpath(p))
+
+        ttk.Button(body, text="另存为…", command=save_as).grid(row=2, column=3, sticky="e", pady=(6, 0))
+        cb.bind("<<ComboboxSelected>>", default_out)
+        ent_letter.bind("<KeyRelease>", default_out)
+
+        def go(*_e):
+            name, n = toolutil.parse_contest(cb.get())
+            if not name or not n:
+                messagebox.showerror("导出题解包", "认不出场次「%s」" % cb.get(), parent=win)
+                return
+            letter = ent_letter.get().strip().upper()
+            if letter and not re.match(r"^[A-Z]$", letter):
+                messagebox.showerror("导出题解包", "题号要写单个字母（A~Z），或留空导整场", parent=win)
+                return
+            target = "Round%d%s" % (n, ("-" + letter) if letter else "")
+            out = var_out.get().strip().strip('"')
+            if not out:
+                messagebox.showerror("导出题解包", "给输出 zip 挑个位置（`另存为…`）", parent=win)
+                return
+            win.destroy()
+            w2, text, status, btn = self._open_pack_report(
+                PACK_EXPORT_LABEL.rstrip("…"), "导出 %s → %s" % (target, out), allow_apply=False)
+            self._pack_report_append(text, "正在导出 %s ……\n" % target)
+            self._start_pack_job(kind="export", pack=None,
+                                 argv=pack_export_argv(target, out, self.data_root),
+                                 win=w2, text=text, status=status, btn=btn)
+
+        btns = tk.Frame(win, bg=C_BG)
+        btns.pack(fill="x", padx=16, pady=(8, 14))
+        ttk.Button(btns, text="开始导出", command=go).pack(side="right")
+        ttk.Button(btns, text="取消", command=win.destroy).pack(side="right", padx=(0, 8))
+        ent_out.bind("<Return>", go)
+        win.bind("<Escape>", lambda _e: win.destroy())
+        self._center_on_root(win)
+        default_out()
+        cb.focus_set()
+        win.grab_set()
+        win.wait_window()
+
+    def _open_pack_report(self, title, subtitle, allow_apply):
+        """报告窗：只读文本框 + 状态行 +（导入时）「应用到数据根」。
+
+        返回 (win, text, status, btn)；btn 在 allow_apply=False 时没 pack（调用方仍可拿到）。
+        """
+        win = tk.Toplevel(self.root)
+        win.title("题解包 —— %s" % title)
+        win.configure(bg=C_BG)
+        win.geometry("860x560")
+        top = tk.Frame(win, bg=C_BG)
+        top.pack(fill="x", padx=14, pady=(12, 0))
+        tk.Label(top, text=subtitle, bg=C_BG, fg=C_MUTED, font=(self.fam, 12),
+                 anchor="w", justify="left").pack(fill="x")
+        body = tk.Frame(win, bg=C_BG)
+        body.pack(fill="both", expand=True, padx=14, pady=(8, 0))
+        text = tk.Text(body, wrap="none", font=("Consolas", 10), bg=C_PANEL, fg=C_TEXT,
+                       relief="solid", borderwidth=1)
+        sb = ttk.Scrollbar(body, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+        text.configure(state="disabled")
+        status = tk.Label(win, text="跑着呢……", bg=C_BG, fg=C_ACCENT_DARK, anchor="w",
+                          font=(self.fam, 13, "bold"))
+        status.pack(fill="x", padx=14, pady=(8, 0))
+        btns = tk.Frame(win, bg=C_BG)
+        btns.pack(fill="x", padx=14, pady=(6, 12))
+        tk.Button(btns, text="关闭", command=win.destroy).pack(side="right")
+        btn = None
+        if allow_apply:
+            btn = ttk.Button(btns, text="应用到数据根", state="disabled")
+            btn.pack(side="right", padx=(0, 8))
+        self._center_on_root(win)
+        return win, text, status, btn
+
+    def _pack_report_append(self, text, chunk):
+        """往报告窗追加一段（只读 Text：临时放开 → 追加 → 收回 → 滚到底）。"""
+        try:
+            text.configure(state="normal")
+            text.insert("end", chunk)
+            text.configure(state="disabled")
+            text.see("end")
+        except tk.TclError:
+            pass                                  # 报告窗被关了：任务照跑
+
+    def _start_pack_job(self, kind, pack, argv, win, text, status, btn, applied=False):
+        """后台线程跑 import / export 的 main()：stdout 实时贴进报告窗（同时只跑一个）。"""
+        q = queue.Queue()
+        self._pack_job = {"win": win, "kind": kind, "pack": pack, "queue": q, "applied": applied}
+
+        def worker():
+            old = (sys.stdout, sys.stderr)
+
+            class _QW:                             # stdout → 队列（报告窗实时刷）
+                def write(self, s):
+                    if s:
+                        q.put(("out", s))
+                    return len(s)
+
+                def flush(self):
+                    pass
+
+                def reconfigure(self, **kw):       # 子脚本模块顶层会调（见 pack_cli 的同款注释）
+                    return None
+            sys.stdout = sys.stderr = _QW()
+            rc = 1
+            try:
+                mod = _load_tool("export_solution" if kind == "export" else "import_solution")
+                try:
+                    rc = mod.main(list(argv))
+                except SystemExit as e:
+                    rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+            except Exception:
+                traceback.print_exc()
+                rc = 1
+            finally:
+                sys.stdout, sys.stderr = old
+            q.put(("done", rc))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        self._poll_pack_job(win, text, status, btn)
+
+    def _poll_pack_job(self, win, text, status, btn):
+        """每 150ms 把后台任务的输出贴出来；跑完按（退出码, 是否 --apply）落状态行。
+
+        报告窗被关掉也不打断任务（改轮 root）——跑完一样清 _pack_job、该 reload 就 reload。
+        """
+        job = self._pack_job
+        if job is None:
+            return
+        rc = None
+        try:
+            while True:
+                kind, payload = job["queue"].get_nowait()
+                if kind == "out":
+                    self._pack_report_append(text, payload)
+                else:
+                    rc = payload
+        except queue.Empty:
+            pass
+        if rc is None:
+            try:
+                if win.winfo_exists():
+                    win.after(150, lambda: self._poll_pack_job(win, text, status, btn))
+                    return
+            except tk.TclError:
+                pass
+            self.root.after(150, lambda: self._poll_pack_job(win, text, status, btn))
+            return
+        self._pack_job = None
+        pack, applied, job_kind = job["pack"], job["applied"], job["kind"]
+        if job_kind == "export":
+            can_apply = False
+            verdict = ("导出完成 —— 包在上面写的路径（清单见上）" if rc == 0
+                       else "导出失败（退出码 %d，看上面的报错）" % rc)
+        else:
+            can_apply, verdict = pack_verdict(rc, applied)
+        try:
+            status.config(text=verdict)
+        except tk.TclError:
+            pass
+        if can_apply and btn is not None:
+            try:
+                btn.config(state="normal",
+                           command=lambda: self._pack_apply(pack, win, text, status, btn))
+            except tk.TclError:
+                pass
+        if job_kind == "import" and applied and rc == 0:
+            self.reload(note="已导入题解包", clear_after=TOAST_MS)
+
+    def _pack_apply(self, pack, win, text, status, btn):
+        """「应用到数据根」：同一个包带 --apply 再跑一遍（这一步才真写盘）。"""
+        if self._pack_job is not None:
+            self.set_msg("已有题解包任务在跑，等它结束", clear_after=TOAST_MS)
+            return
+        parent = win if getattr(win, "winfo_exists", lambda: False)() else self.root
+        if not messagebox.askyesno(
+                "导入题解包",
+                "把 %s 导进数据根？\n\n会写文件 / 索引 / 状态表 / 台账（写前自动备份）。"
+                % os.path.basename(pack), parent=parent):
+            return
+        try:
+            btn.config(state="disabled")
+        except tk.TclError:
+            pass
+        self._pack_report_append(text, "\n" + "─" * 62 + "\n── 应用（--apply）──\n")
+        self._start_pack_job(kind="import", pack=pack,
+                             argv=pack_import_argv(pack, self.data_root, True),
+                             win=win, text=text, status=status, btn=btn, applied=True)
+
+    def _center_on_root(self, win):
+        """把对话框 / 报告窗摆到主窗口中间（偏上一点）。"""
+        try:
+            win.update_idletasks()
+            w, h = win.winfo_width(), win.winfo_height()
+            x = self.root.winfo_rootx() + (self.root.winfo_width() - w) // 2
+            y = self.root.winfo_rooty() + (self.root.winfo_height() - h) // 3
+            win.geometry("+%d+%d" % (max(x, 0), max(y, 0)))
+        except tk.TclError:
+            pass
+
     def _error(self, title, text):
         if not self.quiet:
             try:
@@ -1997,9 +2600,13 @@ def _count_bak(d):
     return len([n for n in os.listdir(d) if n.endswith(".bak")])
 
 
-def _run_report(md):
-    """跨工具一致性：把 status_report.py 当子进程跑一遍，返回 (退出码, 输出文本)。"""
-    p = subprocess.run([sys.executable, SR.__file__, "--file", md], capture_output=True)
+def _run_report(md, extra=()):
+    """跨工具一致性：把 status_report.py 当子进程跑一遍，返回 (退出码, 输出文本)。
+
+    extra 会加在 --file 后（v13：拿命令行的筛选模式跟 GUI 比命中集合，真跑子进程）。
+    """
+    p = subprocess.run([sys.executable, SR.__file__, "--file", md] + list(extra),
+                       capture_output=True)
     return p.returncode, p.stdout.decode("utf-8", "replace")
 
 
@@ -2120,6 +2727,29 @@ def selftest():
     print("    (h) 脚本同目录的 %s 全程没被碰过 ✓" % CONFIG_NAME)
     print("[5] fixture 收尾：sha256 = %s（与改回后一致）｜ 临时目录保留在 %s"
           % (_sha256(tmp)[:16], tmpdir))
+
+    # --- v13：[6] 题解包三入口的纯逻辑（argv 拼法 / 退出码文案 / 可导出场次）——
+    # 不开窗口、不碰磁盘；真正的执行（后台线程 / 进程内调用）由 --smoke 与 CLI 闸门覆盖。
+    assert pack_import_argv(r"X:\包.zip", r"X:\root") == [r"X:\包.zip", "--root", r"X:\root"]
+    assert pack_import_argv("a.zip", "r", True) == ["a.zip", "--apply", "--root", "r"]
+    assert pack_export_argv("Round163", "", "R") == ["Round163", "--root", "R"]
+    assert pack_export_argv("Round163-G", "o.zip", "R") == ["Round163-G", "-o", "o.zip", "--root", "R"]
+    can_after, msg_after = pack_verdict(0, True)
+    can_dry, msg_dry = pack_verdict(0, False)
+    assert (can_after, can_dry) == (False, True)
+    assert "导入完成" in msg_after and "校验通过" in msg_dry
+    assert not pack_verdict(1, False)[0] and "不合格" in pack_verdict(1, False)[1]
+    assert not pack_verdict(2, False)[0] and "不可读" in pack_verdict(2, False)[1]
+    rr = pack_round_choices(rows)
+    want_rr = sorted({r["场次"] for r in rows}, key=round_num, reverse=True)
+    assert rr == want_rr == [("牛客周赛 Round %d" % n) for n in
+                             (210, 208, 207, 205, 204, 203, 202, 201, 200, 199, 197, 188)], rr
+    assert pack_round_choices([{"场次": "Codeforces Round 1000"}, {"场次": "Round 161"},
+                               {"场次": "AtCoder ABC 380"}, {"场次": "牛客周赛 Round 210"},
+                               {"场次": "牛客周赛 Round 210"}]) == ["牛客周赛 Round 210"], \
+        "只认「牛客周赛 Round N」形式（跟 export_solution 同口径）、同场次去重"
+    print("[6] 题解包纯逻辑：dry / --apply 两套 argv；退出码 0/1/2 三种文案；"
+          "可导出场次 = 12 场按场次号降序（非牛客 / 认不出的场次不收）✓")
     print("ALL OK")
     return 0
 
@@ -2181,7 +2811,9 @@ def smoke():
     print("(hh) 第一行 = 搜索标签 + 搜索框（宽 %s）+ 统计 + 消息（side=right，同一父容器）；"
           "无大标题 / 无路径行 ✓；(ll) 启动消息为空（无「已读入 …」）✓" % gui.ent_search.cget("width"))
 
-    # --- v9 闸门 (ii)：状态筛选整块没了 —— 窗口里没有下拉框、没有 var_filter / cmb_filter、F 不绑东西
+    # --- v9 闸门 (ii)：那个「状态筛选**下拉框**」整块没了 —— 窗口里没有下拉框、没有
+    #     var_filter / cmb_filter、F 不绑东西（v13 的筛选区是输入框 + 按钮，不是把它搬回来）
+
     combos = [w for w in [root] + list(_walk(root)) if w.winfo_class() == "TCombobox"]
     assert combos == [], "窗口里还有下拉框：%r" % (combos,)
     assert not hasattr(gui, "var_filter") and not hasattr(gui, "cmb_filter"), \
@@ -2192,8 +2824,8 @@ def smoke():
     gui.tree.event_generate("<KeyPress>", keysym="f")
     root.update()
     assert root.focus_get() is gui.tree, "按 F 不该有任何反应（焦点被抢到 %r）" % root.focus_get()
-    print("(ii) 筛选整块没了：窗口里 0 个 TCombobox；var_filter / cmb_filter 不存在；"
-          "F 未绑定（按下去什么也不发生）✓")
+    print("(ii) 下拉框式筛选没了：窗口里 0 个 TCombobox；var_filter / cmb_filter 不存在；"
+          "F 未绑定（按下去什么也不发生）✓（v13 的筛选区走输入框 + 按钮，见 (zz)）")
 
     # --- v3 闸门 (a)：排序键只留 场次 / 难度 / 日期（知识点不可排）
     assert list(SORTABLE) == ["场次", "难度", "日期"], SORTABLE
@@ -2562,31 +3194,55 @@ def smoke():
     print("(r) 浮层里按 %d → 直接写入第 %d 个状态「%s」（浮层数字直选没被误删）✓"
           % (key3, key3, want3))
 
-    # --- v9 闸门 (jj)：Tab / Shift+Tab 只在两个焦点之间轮换（主页面 ⇄ 搜索框）
+    # --- v9 闸门 (jj)：Tab / Shift+Tab 焦点轮换（v13：两站 → 五站，见下）
     assert root.bind("<Tab>") != "" and root.bind("<Shift-Tab>") != "", \
-        "root 上要挂 Tab / Shift-Tab 两焦点轮换"
+        "root 上要挂 Tab / Shift-Tab 焦点轮换"
     gui.nb.select(0)
-    gui.tree.focus_set()
-    root.update()
+    gui.tree.focus_force()                   # 合成按键 / 反复查 focus_get 前先 focus_force：
+    root.update()                            # 窗口没拿到 OS 焦点时 focus_get() 会给 None（v10 踩过）
+    ring = [gui.ent_search, gui.ent_know, gui.ent_diff, gui.chip_btns[0], gui.tree]
     seq = []
-    for _ in range(4):                       # 绕两圈：每圈只停 搜索框 / 主页面（总表树）
+    for _ in range(2 * len(ring)):            # 绕两圈：每圈 5 站
         w = root.focus_get()
         assert w is not None, "轮换过程中焦点不能丢"
         w.event_generate("<KeyPress>", keysym="Tab")
         root.update()
         seq.append(root.focus_get())
-    want = [gui.ent_search, gui.tree] * 2
+    want = ring * 2
     assert seq == want, "Tab 轮换序列不对：%r" % ([str(x) for x in seq],)
-    gui.tree.focus_set()
+    # 状态组里任何一个小按钮上都算「状态」这一站（组内用 ← / → 走）
+    gui.chip_btns[3].focus_force()
+    root.update()
+    gui.chip_btns[3].event_generate("<KeyPress>", keysym="Tab")
+    root.update()
+    assert root.focus_get() is gui.tree, "从状态组（第 4 个按钮）按 Tab 该跳到主页面"
+    gui.chip_btns[3].focus_force()
+    root.update()
+    gui.chip_btns[3].event_generate("<KeyPress>", keysym="Tab", state=0x1)
+    root.update()
+    assert root.focus_get() is gui.ent_diff, "从状态组按 Shift+Tab 该跳到难度框"
+    gui.tree.focus_force()
     root.update()
     seq2 = []
-    for _ in range(2):                       # Shift+Tab 反向
+    for _ in range(len(ring)):                # Shift+Tab 反向绕一圈
         w = root.focus_get()
         w.event_generate("<KeyPress>", keysym="Tab", state=0x1)
         root.update()
         seq2.append(root.focus_get())
-    assert seq2 == [gui.ent_search, gui.tree], \
+    assert seq2 == [gui.chip_btns[0], gui.ent_diff, gui.ent_know, gui.ent_search, gui.tree], \
         "Shift+Tab 反向轮换不对：%r" % ([str(x) for x in seq2],)
+    # 状态组组内导航：← / → 在 6 个按钮上绕；Esc 回表格
+    gui.chip_btns[0].focus_force()
+    root.update()
+    gui.chip_btns[0].event_generate("<KeyPress>", keysym="Left")
+    root.update()
+    assert root.focus_get() is gui.chip_btns[-1], "状态组里 ← 该绕到最后一个按钮"
+    gui.chip_btns[-1].event_generate("<KeyPress>", keysym="Right")
+    root.update()
+    assert root.focus_get() is gui.chip_btns[0], "状态组里 → 该绕回第一个按钮"
+    gui.chip_btns[2].event_generate("<KeyPress>", keysym="Escape")
+    root.update()
+    assert root.focus_get() is gui.tree, "状态按钮上按 Esc 该回表格（不清条件）"
     # 页签 / 段卡片等「中间控件」都不进轮换：takefocus 关掉；Tab 处理只在 root 一处
     for w, name in ((gui.nb, "Notebook"), (gui.card_box[0], "段卡片"),
                     (gui.card_num[0], "卡片数字"), (gui.card_cap[0], "卡片标题")):
@@ -2594,14 +3250,17 @@ def smoke():
             "%s 的 takefocus 没关：%r" % (name, w.cget("takefocus"))
     for w, name in ((gui.tree, "总表树"), (gui.today_tree, "看板树"),
                     (gui.ent_search, "搜索框"),
+                    (gui.ent_know, "知识点框"), (gui.ent_diff, "难度框"),
+                    (gui.chip_btns[0], "状态按钮"), (gui.filter_bar, "筛选区"),
                     (gui.nb, "Notebook"), (gui.tab_all, "总表页"),
                     (gui.tab_today, "看板页"), (gui.today_cards, "看板卡片区")):
         assert w.bind("<Tab>") == "" and w.bind("<Shift-Tab>") == "", \
             "%s 上也挂了 Tab 绑定（应该只在 root 一处处理）" % name
     assert root.bind_all("<Tab>") == "" and root.bind_all("<Shift-Tab>") == "", \
         "bind_all 上还有 Tab 处理"
-    print("(jj) Tab 两站轮换：主页面 → 搜索框 → 主页面（两圈都只停这两个）；"
-          "Shift+Tab 反向；页签 / 段卡片 takefocus 全关、Tab 处理只在 root ✓")
+    print("(jj) Tab 五站轮换（v13）：主页面 → 搜索 → 知识点 → 难度 → 状态 → 主页面，正反两圈都"
+          "只停这五站；状态组里 ← / → 绕圈、Esc 回表格；页签 / 段卡片 takefocus 全关、"
+          "Tab 处理只在 root ✓")
 
     # --- v6 闸门 (t)：两个焦点各有可见指示（选中行换色 / 输入框边框 + 底色换强调色）
     st = ttk.Style(root)
@@ -2812,8 +3471,8 @@ def smoke():
 
     # --- v3：? 弹快捷键一览（内容 = 键位表原文），Esc 关闭
     gui.nb.select(0)
-    gui.tree.focus_set()
-    root.update()
+    gui.tree.focus_force()          # 合成按键前必须 focus_force：窗口没拿到 OS 焦点时
+    root.update()                   # focus_set 是空操作，event_generate 送不到（v10 老坑）
     gui.tree.event_generate("<KeyPress>", keysym="question")
     root.update()
     assert gui.help_win is not None, "? 应弹出快捷键一览"
@@ -2829,14 +3488,22 @@ def smoke():
         "键位表里该有 Shift+Enter 打开原题那行（v12）：%r" % ks
     assert any(ln.startswith("Ctrl+Z") and "可连撤" in ln for ln in ks), \
         "键位表里 Ctrl+Z 那行该写出「可连撤」（v12）：%r" % ks
-    assert "筛选" not in KEY_TABLE and "下拉" not in KEY_TABLE, "键位表里还有筛选 / 下拉字样"
+    # v13：筛选区回来了（输入框 + 按钮，不是 v9 删的那个下拉框）——「筛选」那几个字可以有，
+    # 「下拉」不许有（窗口里没有下拉控件了，见 (ii)）；两条筛选区说明必须有。
+    assert "下拉" not in KEY_TABLE, "键位表里还有「下拉」字样（窗口里没有下拉控件）"
+    assert any(ln.startswith("筛选区") and "只筛总表" in ln for ln in ks), \
+        "键位表里该有筛选区那行（v13）：%r" % ks
+    assert any(ln.startswith("状态按钮上") and "Esc 回表格" in ln for ln in ks), \
+        "键位表里该有状态按钮那行（v13）：%r" % ks
+    assert any(ln.startswith("Tab / Shift+Tab") and "知识点" in ln and "难度" in ln for ln in ks), \
+        "键位表里 Tab 那行该写出五站（v13）：%r" % ks
     print("? 快捷键一览：%d 行键位表原文；Esc 关闭" % len(ks))
     gui.help_win.event_generate("<Escape>")
     root.update()
     assert gui.help_win is None, "Esc 应关掉一览"
     assert root.focus_get() is gui.tree, "关掉一览后焦点应回到表格"
     print("(kk) 一览与 KEY_TABLE 一字不差：%d 行、无裸 F 行（F5 / F11 不算）、"
-          "有 F11 全屏行、无「筛选 / 下拉」字样 ✓" % len(ks))
+          "有 F11 全屏行、有筛选区两行（v13）、无「下拉」字样 ✓" % len(ks))
     print("Esc 关闭一览、焦点回表格 ✓")
 
     # --- v4 闸门 (c)：搜索**跟题**（选中的题还在结果里 → 仍选它；被搜掉 → 回第一行）（v9：筛选半边删除）
@@ -3049,7 +3716,7 @@ def smoke():
     gui.nb.select(0)
     gui.var_search.set("")
     gui.refresh_view()
-    gui.tree.focus_set()
+    gui.tree.focus_force()          # 合成按键前一律 focus_force（见 (jj) 注释）
     root.update()
     _pick_row(gui.tree, "牛客周赛 Round 188", "D")
     gui.tree.event_generate("<KeyPress>", keysym="Return", state=0x20000)    # = Alt+Enter（实测这个 state 口径能命中）
@@ -3074,7 +3741,7 @@ def smoke():
     gui.show_segment(1)
     root.update()
     _pick_row(gui.today_tree, "牛客周赛 Round 208", "E")
-    gui.today_tree.focus_set()
+    gui.today_tree.focus_force()
     root.update()
     gui.today_tree.event_generate("<KeyPress>", keysym="Return", state=0x20000)
     root.update()
@@ -3086,7 +3753,7 @@ def smoke():
     row_o = _pick_row(gui.tree, "牛客周赛 Round 200", "A")
     saved_round = row_o["场次"]
     row_o["场次"] = "洛谷月赛 Round 5"
-    gui.tree.focus_set()
+    gui.tree.focus_force()
     root.update()
     gui.tree.event_generate("<KeyPress>", keysym="Return", state=0x20000)
     root.update()
@@ -3123,7 +3790,7 @@ def smoke():
     assert (gui._last_change["old_status"], gui._last_change["old_date"]) == (old_state, old_date)
     assert (gui._last_change["new_status"], gui._last_change["new_date"]) == \
         (new_state, datetime.date.today().isoformat())
-    gui.tree.focus_set()
+    gui.tree.focus_force()
     root.update()
     gui.tree.event_generate("<KeyPress>", keysym="z", state=0x4)             # = Ctrl+Z
     root.update()
@@ -3137,7 +3804,7 @@ def smoke():
         gui.var_msg.get()
     assert gui._msg_after is not None, "撤销提示也要 3 秒消失那套"
     # 再按一次：没有可撤的 —— 只提示，文件一个字不动（这次从搜索框里按 = 任何焦点下都生效）
-    gui.ent_search.focus_set()
+    gui.ent_search.focus_force()
     root.update()
     gui.ent_search.event_generate("<KeyPress>", keysym="z", state=0x4)
     root.update()
@@ -3830,6 +4497,205 @@ def smoke():
           "「CF1900」≡「CF 1900」= 188D；「CF900」空而「CF 900」子串命中 188D（v10 子串口径）；"
           "「cf800」= 两行 CF 800 ✓")
 
+    # --- v13 闸门 (zz)：筛选区 —— 多条件组合（知识点 / 状态 / 难度）只筛总表，
+    #     且与命令行是**同一份实现**（拿子进程真跑 status_report.py 的筛选模式比命中集合）
+    # 前面的闸门改过夹具的状态并真写了盘（uu / vv）→ 先重造一份干净夹具再往下断言，
+    # 否则「某状态有几行」这种硬编码期望会随前面闸门的副作用漂移。
+    write_fixture(tmp)
+    gui.reload()
+    gui.nb.select(0)
+    gui.var_search.set("")
+    gui._clear_filters()
+    root.update()
+    assert len(gui.tree.get_children()) == len(FIXTURE_ROWS), "清空筛选后该是全量 12 行"
+
+    def _showing():
+        return set((gui.row_by_iid(x)["场次"], gui.row_by_iid(x)["题号"])
+                   for x in gui.tree.get_children())
+
+    def _set(know="", diff="", sts=()):
+        gui.var_know.set(know)
+        gui.var_diff.set(diff)
+        gui.status_on.clear()
+        gui.status_on.update(sts)
+        gui._paint_chips()
+        gui.refresh_view()
+        root.update()
+
+    def _cli_keys(out):
+        """命令行筛选输出 → {(场次, 题号)}：命中行以 4 空格起头，场次列后跟 2+ 空格。"""
+        ks = set()
+        for ln in out.splitlines():
+            m = re.match(r"^ {4}(牛客周赛 Round \d+) {2,}(\S+) ", ln)
+            if m:
+                ks.add((m.group(1), m.group(2)))
+        return ks
+
+    k203 = ("牛客周赛 Round 203", "D")     # 树形DP / 动态规划 ｜ 树形DP / CF 1800 / 巩固
+    k210 = ("牛客周赛 Round 210", "E")     # 区间DP / 动态规划 ｜ 前缀和 / CF 1700 / 待重写
+    k208 = ("牛客周赛 Round 208", "E")     # 期望DP / 概率与期望 ｜ 动态规划 / CF 2000 / 不会
+    k197 = ("牛客周赛 Round 197", "A")     # 模拟 / CF 800 / 未做
+    k200 = ("牛客周赛 Round 200", "A")     # 模拟 / CF 800 / 巩固
+
+    # ① 知识点：子串命中（忽略空格大小写）+ 逗号分隔取并集
+    _set(know="树形DP")
+    assert _showing() == {k203}, sorted(_showing())
+    _set(know="树形 DP")
+    assert _showing() == {k203}, "带空格的写法该命中同一行"
+    # 子串口径：`DP` 只中「知识点里真写了 DP」的行（fixture 里只有 203D 的「树形DP」），
+    # 写了「动态规划」的两行要另外写「动态规划」——不查词典、不替用户发明同义写法；
+    # 想一次查全几种写法就逗号并列（= 并集）。
+    _set(know="DP")
+    assert _showing() == {k203}, sorted(_showing())
+    _set(know="动态规划")
+    assert _showing() == {k203, k210, k208}, sorted(_showing())
+    _set(know="DP, 动态规划")
+    assert _showing() == {k203, k210, k208}, "逗号分隔该是并集（两种写法一次查全）"
+    assert gui.var_hits.get() == "筛出 3 题", gui.var_hits.get()
+
+    # ② 状态按钮：多选 = 并集；再点一次 = 取消
+    k188 = ("牛客周赛 Round 188", "D")     # 树链剖分 / CF 1900 / 待重写
+    k201 = ("牛客周赛 Round 201", "F")     # 构造 / CF 2100 / 不会
+    _set(sts=["待重写", "不会"])
+    assert _showing() == {k188, k210, k201, k208}, sorted(_showing())
+    gui._toggle_status("不会")
+    root.update()
+    assert _showing() == {k188, k210}, sorted(_showing())
+    gui._toggle_status("不会")
+    root.update()
+    assert _showing() == {k188, k210, k201, k208}, "再点一次该把「不会」选回来"
+    gui.status_on.clear()
+
+    # ③ 难度：闭区间 / 单值 / <= / >=（多值取并集）
+    _set(diff="1700-2000")
+    assert _showing() == {k210, k203, k208, ("牛客周赛 Round 188", "D")}, sorted(_showing())
+    _set(diff="1500")
+    assert _showing() == {("牛客周赛 Round 204", "C")}, sorted(_showing())
+    _set(diff="<=800")
+    assert _showing() == {k200, k197}, sorted(_showing())
+    _set(diff=">=2000")
+    assert _showing() == {k208, ("牛客周赛 Round 201", "F")}, sorted(_showing())
+    _set(diff="1200, 1500")
+    assert _showing() == {("牛客周赛 Round 202", "B"), ("牛客周赛 Round 204", "C")}, sorted(_showing())
+
+    # ④ 三条件 AND + 写法不认的难度：一条都不匹配，并在「筛出 N 题」后面点名
+    _set(know="动态规划", diff=">=1700", sts=["待重写", "不会"])
+    assert _showing() == {k210, k208}, sorted(_showing())
+    assert gui.var_hits.get() == "筛出 2 题", gui.var_hits.get()
+    _set(know="动态规划", diff="一千")
+    assert _showing() == set(), "难度写法认不出 → 一条都不匹配（不是当没写）"
+    assert "筛出 0 题" in gui.var_hits.get() and "难度写法不认" in gui.var_hits.get(), gui.var_hits.get()
+    _set(know="动态规划")
+    assert "难度写法不认" not in gui.var_hits.get()
+
+    # ⑤ 与命令行同一份实现的硬证据：同条件真跑子进程，命中集合必须一模一样
+    combos = [
+        (dict(know="DP"), ["--knowledge", "DP"]),
+        (dict(know="DP, 动态规划"), ["--knowledge", "DP,动态规划"]),
+        (dict(know="树形 DP"), ["--knowledge", "树形 DP"]),
+        (dict(sts=["待重写", "不会"]), ["--status", "待重写,不会"]),
+        (dict(know="DP", sts=["未做", "不会", "待重写"]), ["--todo", "--knowledge", "DP"]),
+        (dict(know="动态规划", sts=["未做", "不会", "待重写"]),
+         ["--todo", "--knowledge", "动态规划"]),
+        (dict(diff="1700-2000"), ["--difficulty", "1700-2000"]),
+        (dict(diff="<=800", sts=["未做"]), ["--status", "未做", "--difficulty", "<=800"]),
+        (dict(know="动态规划", diff=">=1700", sts=["待重写", "不会"]),
+         ["--knowledge", "动态规划", "--difficulty", ">=1700", "--status", "待重写,不会"]),
+        (dict(know="不存在的知识点"), ["--knowledge", "不存在的知识点"]),
+        (dict(diff="一千"), ["--difficulty", "一千"]),
+    ]
+    for kw, argv in combos:
+        _set(know=kw.get("know", ""), diff=kw.get("diff", ""), sts=kw.get("sts", ()))
+        gui_keys = _showing()
+        rc, out = _run_report(tmp, argv)
+        assert rc == 0, "命令行 `%s` 退出码 %d：\n%s" % (" ".join(argv), rc, out)
+        cli_keys = _cli_keys(out)
+        assert gui_keys == cli_keys, \
+            "GUI 与命令行命中集合不一致：`%s`\n  GUI=%r\n  CLI=%r" % (" ".join(argv), sorted(gui_keys), sorted(cli_keys))
+        assert ("筛出 %d 题" % len(gui_keys)) in out, \
+            "命令行报的条数跟命中集合对不上：%s\n%s" % (" ".join(argv), out)
+    print("(zz) 筛选区：知识点（子串 / 忽略空格 / 逗号并集）/ 状态多选（并集、可取消）/ 难度"
+          "（区间 / 单值 / <= / >= / 多值并集）三条件 AND 都对；写法不认的难度一条不匹配且点名；"
+          "**11 组条件逐组拿子进程真跑 status_report.py 比过命中集合，全部一字不差** ✓")
+
+    # ⑥ 清空按钮 / 两个框的 Esc（清这一格 + 回表格）/ Enter 跳回总表
+    _set(know="动态规划", diff=">=1700", sts=["不会"])
+    assert len(gui.tree.get_children()) == 1 and gui.var_hits.get() != ""
+    gui._clear_filters()
+    root.update()
+    assert len(gui.tree.get_children()) == len(FIXTURE_ROWS)
+    assert gui.var_hits.get() == "", "清空后「筛出 N 题」该消失：%r" % gui.var_hits.get()
+    gui.ent_know.focus_force()
+    root.update()
+    gui.var_know.set("树形DP")
+    gui.refresh_view()
+    gui.ent_know.event_generate("<KeyPress>", keysym="Escape")
+    root.update()
+    assert gui.var_know.get() == "" and root.focus_get() is gui.tree, "知识点框 Esc：清这一格 + 回表格"
+    gui.var_diff.set(">=1700")
+    gui.refresh_view()
+    gui.ent_diff.focus_force()
+    root.update()
+    gui.ent_diff.event_generate("<KeyPress>", keysym="Escape")
+    root.update()
+    assert gui.var_diff.get() == "" and root.focus_get() is gui.tree, "难度框 Esc 同款"
+    gui.var_know.set("DP")
+    gui.refresh_view()
+    gui.ent_know.focus_force()
+    root.update()
+    gui.ent_know.event_generate("<KeyPress>", keysym="Down")
+    root.update()
+    assert root.focus_get() is gui.tree and gui.var_know.get() == "DP", "筛选框 ↓ 该带条件跳回总表"
+    gui.var_know.set("")
+    gui.var_diff.set("")
+    gui.refresh_view()
+    assert gui.var_hits.get() == "", "条件清空后计数该消失"
+
+    # ⑦ 筛选只作用于总表：看板四段数字 / 计数行不受筛选影响（跟搜索一个口径）
+    _set(know="动态规划", sts=["待重写"])
+    seg = [len(segment_rows(gui.rows, i)) for i in range(4)]
+    assert [gui.card_num[i].cget("text") for i in range(4)] == [str(n) for n in seg], \
+        "筛选不该动看板四段数字"
+    assert gui.var_count.get().startswith("共 %d 题" % len(gui.rows)), \
+        "计数行该按全量算（v10 口径），不受筛选影响：%r" % gui.var_count.get()
+    _set(know="动态规划")
+    assert _showing() == {k203, k210, k208}, "搜索框还空着时筛选结果该回来"
+    gui.var_search.set("Round 210")
+    gui.refresh_view()
+    assert _showing() == {k210}, "筛选 ∧ 搜索 = 交集"
+    gui.var_search.set("")
+    gui._clear_filters()
+    root.update()
+    assert len(gui.tree.get_children()) == len(FIXTURE_ROWS)
+    print("⑦（同 (zz)）清空 / Esc / Enter / 看板不受影响 / 筛选 ∧ 搜索取交集 ✓")
+
+    # --- v13 闸门 (yy)：菜单「题解包」三项在（导入 / 导出 / ── / 一键校验）；报告窗能建能写；
+    # 有任务在跑时三入口一律拦下（不弹选包框）。真跑导入由 CLI 闸门（--pack-check）覆盖。
+    mb = gui.root.nametowidget(gui.root.cget("menu"))
+    assert mb.entrycget(0, "label") == PACK_MENU_LABEL, mb.entrycget(0, "label")
+    pm = mb.nametowidget(mb.entrycget(0, "menu"))
+    kinds = [pm.type(i) for i in range(pm.index("end") + 1)]
+    labels = [pm.entrycget(i, "label") for i in range(len(kinds)) if kinds[i] != "separator"]
+    assert kinds == ["command", "command", "separator", "command"], kinds
+    assert labels == [PACK_IMPORT_LABEL, PACK_EXPORT_LABEL, PACK_CHECK_LABEL], labels
+    w, rep, st, btn = gui._open_pack_report("导入题解包", "包：X.zip（冒烟）", allow_apply=True)
+    gui._pack_report_append(rep, "hello 报告\n")
+    assert rep.get("1.0", "end").startswith("hello 报告"), rep.get("1.0", "end")
+    assert str(rep.cget("state")) == "disabled" and str(btn.cget("state")) == "disabled"
+    assert st.cget("text") == "跑着呢……" and gui._pack_job is None, "报告窗自己不许起任务"
+    w.destroy()
+    w2, rep2, st2, btn2 = gui._open_pack_report("一键校验", "包：Y.zip（冒烟）", allow_apply=False)
+    assert btn2 is None, "只读的报告窗（一键校验 / 导出）不给「应用到数据根」按钮"
+    w2.destroy()
+    gui._pack_job = {"win": None, "kind": "import", "pack": None,
+                     "queue": queue.Queue(), "applied": False}
+    gui.pack_flow("import")                    # 有任务在跑 → 直接拦下（正常路径要弹选包框，会阻塞）
+    assert "已有题解包任务在跑" in gui.var_msg.get(), gui.var_msg.get()
+    gui._pack_job = None
+    print("(yy) 菜单「题解包」= %s / %s / ── / %s（分隔线一条）；报告窗只读、落盘按钮初始禁用、"
+          "只读窗不给按钮；有任务在跑时三入口拦下 ✓"
+          % (PACK_IMPORT_LABEL, PACK_EXPORT_LABEL, PACK_CHECK_LABEL))
+
     assert gui.config_path is None, "--smoke 走过的地方不许写配置"
     assert _cfg_state(script_cfg) == cfg_state0, \
         "冒烟碰了脚本同目录的 %s（v4 要求 --selftest / --smoke 一律不碰）" % script_cfg
@@ -3841,21 +4707,123 @@ def smoke():
     return 0
 
 
+# ================================================================ 无窗口命令行版（v13）
+def _attach_console():
+    """windowed exe：把 stdout / stderr 接回启动它的控制台（接不上就保持 None）。
+
+    打包成 --windowed 后 Win 不会给进程连控制台，从 cmd / bash 启动时 print 是黑洞；
+    `AttachConsole(-1)` 借父进程的控制台，输出就能被 CI / 终端看到。源码环境不动。
+    """
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        ctypes.windll.kernel32.AttachConsole(-1)
+    except Exception:
+        pass
+    for name, mode in (("stdout", "w"), ("stderr", "w")):
+        cur = getattr(sys, name)
+        if cur is not None:
+            continue
+        try:
+            setattr(sys, name, open("CONOUT$", mode, encoding="utf-8", errors="replace"))
+        except OSError:
+            setattr(sys, name, None)
+
+
+class _Tee:
+    """把输出同时写到若干流（含 None / 已关的流 —— 写不进去就跳过，绝不因日志把任务弄挂）。"""
+
+    def __init__(self, *streams):
+        self.streams = list(streams)
+
+    def write(self, s):
+        for st in self.streams:
+            if st is None:
+                continue
+            try:
+                st.write(s)
+                st.flush()
+            except Exception:
+                pass
+        return len(s) if s else 0
+
+    def flush(self):
+        for st in self.streams:
+            try:
+                if st is not None:
+                    st.flush()
+            except Exception:
+                pass
+
+    def reconfigure(self, **kw):
+        """子脚本**模块顶层**会调它（`fill_knowledge.py` 就是）——这里当 no-op：
+        流在打开时就定好了 utf-8，frozen 下不能因为少这一个方法把整条导入链弄挂。"""
+        return None
+
+    def __getattr__(self, name):
+        """其余属性（encoding / errors / isatty / fileno…）转发给第一个真实流。"""
+        for st in self.streams:
+            if st is not None and hasattr(st, name):
+                return getattr(st, name)
+        raise AttributeError(name)
+
+
+def pack_cli(args):
+    """无窗口跑一个题解包任务（CI / 自动化 / exe），返回退出码。
+
+    与菜单三入口共用同一套 argv 拼法（pack_import_argv / pack_export_argv）与同一个
+    `main()`——命令行走的跟 GUI 走的是一条路。
+    """
+    _attach_console()
+    logf = None
+    logp = args.log
+    if not logp and sys.stdout is None:        # windowed exe 且没接上控制台 → 落日志兜底
+        logp = os.path.join(toolutil.REPO_ROOT, "TimuZhuangtai.log")
+    if logp:
+        logf = open(logp, "a", encoding="utf-8", errors="replace")
+        logf.write("\n===== %s =====\n" % datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    old = (sys.stdout, sys.stderr)
+    sys.stdout = sys.stderr = _Tee(old[0], logf)
+    try:
+        if args.apply and not args.pack_import:
+            print("★ `--apply` 只配合 `--pack-import`（`--pack-check` 是只读的）")
+            return 2
+        if args.pack_export:
+            return _load_tool("export_solution").main(
+                pack_export_argv(args.pack_export, args.out, DATA_ROOT))
+        pack = args.pack_import or args.pack_check
+        return _load_tool("import_solution").main(
+            pack_import_argv(pack, DATA_ROOT, bool(args.apply and args.pack_import)))
+    finally:
+        sys.stdout, sys.stderr = old
+        if logf:
+            logf.close()
+
+
 # ================================================================ 入口
 def main(argv):
     ap = argparse.ArgumentParser(
-        description="题目状态跟踪窗口 v12（tkinter）：全键盘改状态，只改目标行的状态 / 日期。")
+        description="题目状态跟踪窗口 v13（tkinter）：全键盘改状态 + 多条件筛选（知识点 / 状态 / 难度），"
+                    "只改目标行的状态 / 日期；菜单「题解包」= 导入 / 导出 / 一键校验。")
     ap.add_argument("--file", default=DEFAULT_FILE, help="状态表路径（默认 %s）" % DEFAULT_FILE)
     ap.add_argument("--selftest", action="store_true",
                     help="自测：用自造 fixture 做读写校验，不开窗口、不碰真 md")
     ap.add_argument("--smoke", action="store_true",
                     help="窗口冒烟：建窗口 + 走一遍交互，不 mainloop()")
+    ap.add_argument("--pack-import", metavar="包", help="无窗口：校验题解包（加 --apply 才落盘）")
+    ap.add_argument("--pack-check", metavar="包", help="无窗口：只校验题解包，不落盘")
+    ap.add_argument("--pack-export", metavar="Round163[-G]", help="无窗口：导出题解包")
+    ap.add_argument("--apply", action="store_true", help="配合 --pack-import：真写盘（默认只校验）")
+    ap.add_argument("-o", "--out", help="配合 --pack-export：输出 .zip / 目录")
+    ap.add_argument("--log", help="把输出同时写进日志文件（无控制台时默认 exe 旁的 TimuZhuangtai.log）")
     args = ap.parse_args(argv)
 
     if args.selftest:
         return selftest()
     if args.smoke:
         return smoke()
+    if args.pack_import or args.pack_check or args.pack_export:
+        return pack_cli(args)
 
     root = tk.Tk()
     StatusGui(root, args.file, config_path=config_path_default())   # v4：记住上次
