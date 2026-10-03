@@ -23,10 +23,11 @@
     · 每段去掉括号说明（括号 = 赘述，用户要求删）
     · 第一段 = 主；其余去重后 = 次要，用「、」连接；没有次要就不带竖线
 
-归一（用户 2026-10-03 定稿，规则见下方 CANON / DROP / FINAL 三张表）：
-    · 标准名 = 算法库文件夹名；同义合并（二分 / 排序二分查表 → 二分查找）
-    · 细节短语一律删（只留在 D 盘单题题解里）；多解法题主解法并列写竖线左边
-    · 本库 43 题走 `FINAL` 人工定稿表；新场次没登记时走 `normalize()` 自动归一
+归一（2026-10-03 定稿）：规则与词表的唯一出处 = `knowledge/15-知识点词典.md`，
+解析器 = 同目录 `knowledge_dict.py`（本文件不再藏任何名字表）：
+    · 标准名 = 算法库文件夹名（含 DP 子文件夹）；同义合并（二分 → 二分查找）
+    · 细节短语一律删（只留在单题题解里）；多解法题主解法并列写竖线左边
+    · 已定稿题目查词典第三节（人工过审）；新场次走自动归一
 
 只改表头行 + 数据行里对应单元格，其余行逐字节不动；apply 前自动备份；纯 LF 无 BOM。
 """
@@ -37,7 +38,8 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import toolutil  # noqa: E402  （备份统一走它）
+import toolutil        # noqa: E402  （备份统一走它）
+import knowledge_dict  # noqa: E402  （知识点归一/词表的唯一实现）
 
 DEFAULT_FILE = os.path.join(toolutil.DATA_ROOT, "题解", "题目状态.md")
 DEFAULT_INDEX = os.path.join(toolutil.DATA_ROOT, "索引", "题解算法索引.md")
@@ -57,7 +59,6 @@ USAGE = """用法：python fill_knowledge.py [dry|apply] [--file <状态表>] [-
 HEAD_OLD = ["场次", "题号", "题名", "难度", "状态", "日期", "备注"]
 HEAD_NEW = ["场次", "题号", "题名", "知识点", "难度", "状态", "日期"]
 LABEL = "## 题目状态表"
-BAR = "\uff5c"          # 全角竖线
 PUNCT = "\u3001"        # 顿号
 
 
@@ -85,148 +86,17 @@ def split_cells(line):
     return parts
 
 
-def top_split(s):
-    """按顶层 `+` 拆分（括号内的 `+` 不算）"""
-    out, buf, depth = [], "", 0
-    for ch in s:
-        if ch in "（(":
-            depth += 1
-        elif ch in "）)":
-            depth = max(0, depth - 1)
-        if ch in ("+", "、") and depth == 0:
-            out.append(buf)
-            buf = ""
-            continue
-        buf += ch
-    out.append(buf)
-    return [x.strip() for x in out if x.strip()]
-
-
-def strip_paren(s):
-    """去掉（...）/(...) 说明"""
-    return re.sub(r"[（(][^（）()]*[）)]", "", s).strip()
-
-
-# ---------------------------------------------------------------- 归一（2026-10-03 用户定稿）
-# 【标准名从哪来】一律取算法库 `<数据根>\算法\` 里的文件夹名（含 DP 下的子文件夹：
-#   分布压缩DP / 区间DP / 树形DP / 状压DP）。此外固定四个非文件夹标准名：
-#   二分答案 / DFS 序 / Hall 定理 / 连通块计数。
-# 【三条规则】① 同义合并：同一算法只留一个标准名（二分 / 排序二分查表 → 二分查找）；
-#   ② 细节降级：题目专属的描述性短语一律删（洪水填充、字典序双关键字松弛、边的点覆盖…），
-#      它们只留在那一场的单题题解 md 里；
-#   ③ 多解法题：主解法并列写在竖线左边（如 `DFS BFS ｜ 连通块计数`），次要用「、」连。
-CANON = {
-    "二分": "二分查找",
-    "排序二分查表": "二分查找",
-    "单调判定上的二分": "二分答案",
-    "暴力枚举": "枚举",
-    "连续段计数": "连续段",
-    "排序去重": "排序",
-    "位掩码": "位运算",
-    "dfs 序": "DFS 序",
-    "Dijkstra": "最短路",
-    "质因数分解": "素数",
-    "同向双指针": "双指针",
-    "二维前缀和": "前缀和与差分",
-    "后缀和": "前缀和与差分",
-    "树上差分": "前缀和与差分",
-    "区间dp": "区间 DP",
-    "树形dp": "树形 DP",
-    "状压dp": "状压 DP",
-    "分布压缩dp": "分布压缩 DP",
-}
-# 细节短语（自动归一用）：整串命中 → 删
-DROP_EXACT = {
-    "在线维护", "增量更新", "构造方案", "排序扫描", "度数统计", "最优结构的刻画与计数",
-    "阈值分解", "洪水填充", "四连通 / 八连通两套邻居定义", "自定义排序比较器",
-    "字典序双关键字松弛", "异或消去律", "按数字分桶的后缀和", "结构观察", "边的点覆盖",
-    "异侧判定", "逐位比较", "补集计数", "开桶查表", "数位 DP 式区间计数", "字符串",
-    "一次扫描", "前缀最大值", "逐段贪心", "结构刻画", "路径参数化", "代表元去重",
-    "字符串长度的翻倍递推", "DFS 枚举因子", "前缀覆盖计数", "进制转换", "圆上区间 DP",
-}
-# 细节短语（自动归一用）：含这些子串 → 删
-DROP_SUB = ("刻画", "（BFS 迭代版）", "邻居定义", "比较器", "松弛", "消去律", "分桶")
-
-
-def normalize(alg):
-    """自动归一（新场次用）：CANON 合并同义 → DROP 删细节 → 拼 `主 ｜ 次1、次2`"""
-    parts = []
-    for p in [strip_paren(x) for x in top_split(alg)]:
-        p = p.strip()
-        if not p:
-            continue
-        p = CANON.get(p, p)
-        if p in DROP_EXACT or any(s in p for s in DROP_SUB):
-            continue
-        if p not in parts:
-            parts.append(p)
-    if not parts:
-        return ""
-    parts = [re.sub(r"\b(dfs|bfs|dp|lca|rmq)\b", lambda m: m.group(1).upper(), p) for p in parts]
-    res = parts[0]
-    if len(parts) > 1:
-        res += " " + BAR + " " + PUNCT.join(parts[1:])
-    return res
-
-
-# 人工定稿表：本库 43 题的最终写法（2026-10-03 逐题过了一遍）
-FINAL = {
-    (123, "C"): "构造",
-    (123, "D"): "组合计数",
-    (123, "E"): "连续段",
-    (123, "F"): "连续段",
-    (123, "G"): "双指针 ｜ 排序",
-    (124, "C"): "连续段 ｜ 排序",
-    (124, "D"): "图论",
-    (124, "E"): "结论与计数 ｜ 快速幂",
-    (124, "F"): "区间 DP ｜ 栈",
-    (140, "B"): "栈",
-    (140, "C"): "枚举",
-    (140, "D"): "并查集",
-    (140, "E"): "并查集",
-    (140, "F"): "构造",
-    (140, "G"): "生成树 ｜ 并查集",
-    (143, "C"): "素数 ｜ 快速幂",
-    (143, "D"): "二分查找 ｜ 排序",
-    (143, "E"): "贪心",
-    (143, "F"): "分布压缩 DP",
-    (155, "B"): "计算几何 ｜ 枚举",
-    (155, "C"): "枚举",
-    (155, "D"): "位运算",
-    (155, "E"): "位运算",
-    (155, "F"): "构造",
-    (159, "C"): "前缀和与差分 ｜ 二分查找",
-    (159, "D"): "位运算",
-    (159, "E"): "字典树 ｜ 前缀和与差分",
-    (159, "F"): "DFS 序 ｜ 树状数组",
-    (161, "B"): "前缀和与差分",
-    (161, "C"): "位运算 ｜ 排序",
-    (161, "D"): "DFS BFS ｜ 连通块计数",
-    (161, "E"): "最短路",
-    (161, "F"): "折半枚举 ｜ 二分查找",
-    (162, "C"): "取模与同余 ｜ 前缀和与差分",
-    (162, "D"): "递推",
-    (162, "E"): "稀疏表 ｜ 二分答案",
-    (162, "F"): "树形 DP",
-    (163, "B"): "位运算",
-    (163, "C"): "二分图匹配 ｜ Hall 定理",
-    (163, "D"): "构造",
-    (163, "E"): "计算几何",
-    (163, "F"): "字典树",
-    (163, "G"): "置换环 ｜ 差分、树状数组、二分查找",
-}
-
-
-def final_knowledge(name, rnd, letter, alg):
-    """定稿表只覆盖牛客周赛；别的比赛走自动归一（不串平台）"""
-    if name == "牛客周赛":
-        return FINAL.get((rnd, letter)) or normalize(alg)
-    return normalize(alg)
+# ---------------------------------------------------------------- 归一
+# 词表与规则全在 `knowledge/15-知识点词典.md`，解析器是 `knowledge_dict.py`。
+# 本文件只负责「读索引 → 查词典 → 写状态表」，不再藏名字表（数据驱动）。
 
 
 # ---------------------------------------------------------------- 读索引
 def read_index(path):
-    """{(比赛名, 场次号, 字母): 知识点}（场次键走 toolutil.parse_contest，不写死牛客）"""
+    """{(比赛名, 场次号, 字母): 知识点}（场次键走 toolutil.parse_contest，不写死牛客）
+
+    知识点 = 索引「算法 / 数据结构」列经词典归一（定稿表优先 → 自动归一）。"""
+    kd = knowledge_dict.load()
     out = {}
     name, rnd = None, None
     for line in io.open(path, encoding="utf-8").read().split("\n"):
@@ -239,7 +109,7 @@ def read_index(path):
         c = split_cells(line)
         if not c or len(c) != 5 or not re.fullmatch(r"[A-Z]", c[0]):
             continue
-        out[(name, rnd, c[0])] = final_knowledge(name, rnd, c[0], c[3])
+        out[(name, rnd, c[0])] = kd.final_knowledge(name, rnd, c[0], c[3])
     return out
 
 

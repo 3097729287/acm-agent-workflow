@@ -89,7 +89,7 @@ python demo/题解/牛客周赛/Round161/A-F/C/verify_c.py
 
 > 读仓库根目录的 AGENTS.md，然后处理这个比赛：`https://ac.nowcoder.com/acm/contest/<比赛号>`
 
-`AGENTS.md` 是规则的**主干**（10 条铁律 + 索引表），明细全在 `knowledge\`（14 篇），agent 按需取用。
+`AGENTS.md` 是规则的**主干**（11 条铁律 + 索引表），明细全在 `knowledge\`（15 篇），agent 按需取用。
 
 ### 六步流水线
 
@@ -135,6 +135,36 @@ python tools/status_gui.py       # 图形端（Tkinter）
 
 <img src="docs/demo-gui.gif" width="900" alt="status_gui.py 实跑：按数字键改状态 → Ctrl+Z 连撤 → 打开原题与归档记录">
 
+## 题解共享：一场题解的导入 / 导出
+
+题解不该只躺在自己硬盘里。**题解包**是「一场题解 + 算法归档」的可搬格式——
+你用 agent 跑完六步，一条命令打包；别人下载后一条命令收进自己的数据根，
+索引、状态表、已讲过概念台账**自动跟上**。
+
+```bash
+python tools/export_solution.py Round163              # → 牛客周赛Round163.zip
+python tools/export_solution.py Round163-G -o G.zip   # 只要一题
+
+python tools/import_solution.py 牛客周赛Round163.zip          # 先看校验报告（不动盘）
+python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串齿轮 + 对账
+```
+
+导入后的自动链条：复制文件 → 补索引反查表 → 写题解指针 → 更新状态表（新题默认「未做」）
+→ 生成索引场次小节 → 刷「知识点」列 → **`archive_check.py` 退出码 0**。
+**退出码 0 才算收完**，不是「文件复制过去了」就算。
+
+两条口径值得单说：
+
+- **知识点名字有唯一词典**（`knowledge\15-知识点词典.md`，42 个标准名 / 35 个可归档文件夹 / 别名表）。
+  同一个东西的两种写法（`状态压缩DP` ≡ `状压 DP`）在导入导出两侧都自动换成标准名——
+  「我写的」和「别人传的」在索引里永远同一个名字，索引列不会裂成两半。
+- **没登记的名字不拦、照收**。打回只有硬伤（字段缺、文件名认不出、格式闸不过、会覆盖已有文件）；
+  词典里查不到的名字**原样落盘**，同时在报告里出一份**「待登记清单」**（附最接近的标准名建议），
+  合并时一次性收编。上传的人不会因为「名字没对齐」被拒之门外。
+
+包内文件逐字节可往返（`python tools/selfcheck_import.py` 就是验这个：导出 → 导入空数据根 →
+逐文件 sha256 比对 + 对账退出码 0；另有一项专门验「未登记名字照收」）。
+
 ## 工具清单
 
 | 脚本 | 干什么 |
@@ -148,13 +178,16 @@ python tools/status_gui.py       # 图形端（Tkinter）
 | `archive_check.py` | 归档对账，**退出码 0 = 归档完成** |
 | `index_sync.py` | 索引两表自动生成（记录 md 是单一事实来源） |
 | `status_report.py` / `status_gui.py` / `fill_knowledge.py` | 状态表三件套（报告 / 图形端 / 知识点列） |
+| `export_solution.py` / `import_solution.py` | **题解包**：导出一场（或一题）给别人 / 收下别人的包（见下节） |
+| `knowledge_dict.py` | 知识点词典的解析与查询（标准名 / 别名 / 未登记建议） |
+| `selfcheck_import.py` | 导入导出的机器闸门（往返无损 + 未登记照收） |
 | `vizgrid.py` | 终端字符画引擎（讲数据结构配「可跑的图」） |
 | `unify_latex.py` / `unpair_ticks.py` / `extract_math.py` + `katex_check.js` | LaTeX 三件套（转换 / 去灰底 / KaTeX 真渲染） |
 | `check_lost_by_hash.py` | 搬目录后的内容哈希对账 |
 
 完整参考（每个脚本的设计取舍与坑）：[knowledge/10-工具链.md](knowledge/10-工具链.md)。
 
-## 知识库（knowledge\，14 篇）
+## 知识库（knowledge\，15 篇）
 
 | 篇 | 内容 |
 |---|---|
@@ -165,6 +198,7 @@ python tools/status_gui.py       # 图形端（Tkinter）
 | 07-配图 / 08-从零讲 | 可跑的终端字符画；新概念从零讲的四段式 |
 | 11-反面教材 | 已证伪的「实测记录」原文（不许生成结论的实据） |
 | 12-算法坑集 / 13-环境准备 / 14-牛客抓取 | 实现坑合集；工具链安装；牛客页面结构 |
+| 15-知识点词典 | **知识点名字的唯一出处**：标准名 / 文件夹 / 别名 / 已定稿写法 |
 | 01-学习偏好 / 10-工具链 | 讲解风格约定；全部脚本的参考页 |
 
 ## 配置（config.json）
@@ -209,12 +243,12 @@ python tools/status_gui.py       # 图形端（Tkinter）
 
 ```
 acm-agent-workflow\
-├── AGENTS.md            ← 给 AI agent 的规则主干（10 条铁律）
+├── AGENTS.md            ← 给 AI agent 的规则主干（11 条铁律）
 ├── README.md / README.en.md
 ├── LICENSE（MIT）
 ├── install.py           ← 安装助手
 ├── config.example.json
-├── knowledge\           ← 知识库明细（14 篇）
+├── knowledge\           ← 知识库明细（15 篇）
 ├── tools\               ← 全部脚本
 ├── templates\           ← verify 驱动模板
 ├── examples\            ← 可跑反例（故意做坏的题解，闸门当场报红）
@@ -223,7 +257,7 @@ acm-agent-workflow\
 
 ## 贡献
 
-Issue / PR 欢迎。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_unpair.py` 是现成的回归）。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑（不带参数）就是执行验证。
+Issue / PR 欢迎。改脚本前先跑一遍它对应的自检（多数脚本有 `--help`；`status_gui.py --selftest`、`selfcheck_unpair.py`、`selfcheck_import.py`、`knowledge_dict.py selftest` 是现成的回归）。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑（不带参数）就是执行验证。
 
 ## License
 

@@ -22,6 +22,8 @@
      只认 `牛客周赛 Round 161` / `Codeforces Round 1000` / `AtCoder ABC 380`
      （ARC / AGC 同）三种写法；带后缀、没比赛名、其它形式一律 `(None, None)`
      —— **绝不猜**。多平台混排时别拿裸场次号当键（Codeforces Round 161 ≠ 牛客 Round 161）。
+  5. `is_junk(rel)` / `walk_files(base)` / `copy_tree(...)` —— 题解包（导入导出）
+     共用的垃圾过滤与收集：目录名命中 JUNK_DIRS 整棵跳过、后缀命中 JUNK_SUFFIX 剔。
 
 自检：`python toolutil.py`（跑一组断言，全过打印 OK）。
 """
@@ -165,6 +167,77 @@ def fence_blocks(text, languages=None, indent=False):
     return out
 
 
+# ---------------------------------------------------------------- 垃圾过滤
+# 题解包（导出 / 导入）共用的过滤口径：包里只装源码与文档，装不装都行的耗材一律剔除。
+#   目录名命中 → 整棵跳过；文件名后缀命中 → 剔。
+# 与《归档》的「清理约定」同一口径（不留 .exe / png；_work\ 是耗材）。
+JUNK_DIRS = {"_work", "__pycache__", ".git", ".claude", ".vs", ".vscode", "node_modules"}
+JUNK_SUFFIX = (".exe", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".pyc",
+               ".o", ".obj", ".bak", ".orig", "~", ".zip", ".7z", ".rar", ".log")
+BS_SEP = chr(92)          # 反斜杠
+
+
+def is_junk(rel):
+    """相对路径是否为垃圾（包过滤口径）。目录名命中即算，别只比文件名。"""
+    parts = rel.replace("\\", "/").strip("/").split("/")
+    if any(p in JUNK_DIRS for p in parts):
+        return True
+    fn = parts[-1]
+    return fn.endswith(JUNK_SUFFIX)
+
+
+def to_os(rel):
+    """库内相对路径（一律反斜杠写法）→ 本机路径分隔符。
+
+    题解包 / 索引 / manifest 里的相对路径**统一写反斜杠**（跨机器一个口径），
+    拼本机路径前必须换成本机分隔符：Windows 上是 no-op，Linux/macOS 上换成 `/`。
+    不换的话 `os.path.join(root, "题解\\牛客周赛\\x.md")` 在 Linux 上会变成
+    **一个名字里带反斜杠的文件**，而不是三层目录。
+    """
+    if os.sep == BS_SEP:
+        return rel
+    return rel.replace(BS_SEP, os.sep)
+
+
+def walk_files(base):
+    """递归列文件 → [(绝对路径, 相对 base 的路径)]，垃圾已过滤、按相对路径排序。
+
+    相对路径统一用反斜杠（Windows 习惯，与库里其它工具一致；os.walk 会保留
+    输入路径的斜杠风格，这里强制归一，别让 `B-G/B/b.cpp` 和 `B-G\\B\\b.cpp` 两种写法并存）。
+    """
+    out = []
+    for dp, dns, fns in os.walk(base):
+        dns[:] = sorted(d for d in dns if d not in JUNK_DIRS)
+        for fn in sorted(fns):
+            p = os.path.join(dp, fn)
+            rel = os.path.relpath(p, base).replace(os.sep, BS_SEP).replace("/", BS_SEP)
+            if is_junk(rel):
+                continue
+            out.append((p, rel))
+    out.sort(key=lambda x: x[1])
+    return out
+
+
+def copy_tree(src_base, dst_base, files=None, overwrite=False):
+    """把 files（[(绝对路径, 相对路径)]，缺省 = walk_files(src_base)）复制到 dst_base 下。
+
+    返回 (copied, skipped)：skipped = 目标已存在且 overwrite=False 的相对路径。
+    只建需要的子目录；行尾 / 编码原样保留（二进制复制）。
+    """
+    if files is None:
+        files = walk_files(src_base)
+    copied, skipped = [], []
+    for src, rel in files:
+        dst = os.path.join(dst_base, to_os(rel))
+        if os.path.exists(dst) and not overwrite:
+            skipped.append(rel)
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)
+        copied.append(rel)
+    return copied, skipped
+
+
 # ---------------------------------------------------------------- 场次键
 _CONTEST_RES = (
     (re.compile(r"^牛客周赛\s+Round\s+(\d+)$"), "牛客周赛"),
@@ -224,6 +297,20 @@ def _selftest():
     assert parse_contest("随便写的") == (None, None)
     assert parse_contest("") == (None, None)
     assert parse_contest(None) == (None, None)
+
+    # 垃圾过滤：目录名命中整棵跳过、后缀命中剔；真源码一律留
+    assert is_junk("B\\_work\\tmp.txt")
+    assert is_junk("__pycache__\\a.pyc")
+    assert is_junk("B\\b.exe")
+    assert is_junk("B\\图.png")
+    assert is_junk("B\\b.cpp.bak")
+    assert is_junk("B\\b.orig")
+    assert is_junk("B\\b.cpp~")
+    assert not is_junk("B\\b.cpp")
+    assert not is_junk("B\\verify_b.py")
+    assert not is_junk("B\\samples.py")
+    assert not is_junk("Round163题解.md")
+    assert not is_junk("专题\\例子分析器.py")
     print("toolutil 自检 OK")
 
 

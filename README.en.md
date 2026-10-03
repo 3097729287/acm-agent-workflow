@@ -88,7 +88,7 @@ Open this repo in Claude Code (or any agent) and say:
 
 > Read AGENTS.md at the repo root, then process this contest: `https://ac.nowcoder.com/acm/contest/<id>`
 
-`AGENTS.md` is the rule backbone (10 laws + an index table); details live in `knowledge\` (14 docs, in Chinese) and are read on demand.
+`AGENTS.md` is the rule backbone (11 laws + an index table); details live in `knowledge\` (15 docs, in Chinese) and are read on demand.
 
 ### The six-step pipeline
 
@@ -134,6 +134,42 @@ GUI keys: `1`-`6` set state ｜ `Enter` popup ｜ `Ctrl+Z` undo ｜ `Shift+Enter
 
 <img src="docs/demo-gui.gif" width="900" alt="Recorded run of status_gui.py: number keys change the state, Ctrl+Z undoes, the problem page and the archive record open">
 
+## Sharing solutions: export / import a solution pack
+
+A solution pack is a portable bundle of one round's editorials plus its archive records.
+Run the six steps with your agent, export with one command; whoever downloads it imports it
+with one command into their own data root — indexes, status table and the "already taught"
+ledger all follow automatically.
+
+```bash
+python tools/export_solution.py Round163              # -> 牛客周赛Round163.zip
+python tools/export_solution.py Round163-G -o G.zip   # single problem
+
+python tools/import_solution.py 牛客周赛Round163.zip          # validate only (no writes)
+python tools/import_solution.py 牛客周赛Round163.zip --apply  # write + wire up + reconcile
+```
+
+What `--apply` chains: copy files → back-index rows → editorial pointers → status table rows
+(new problems default to "not done") → generated index sections → knowledge column →
+**`archive_check.py` exit code 0**. Exit code 0 is the finish line — "the files were copied"
+is not.
+
+Two rules worth calling out:
+
+- **Knowledge-point names have a single dictionary** (`knowledge\15-知识点词典.md`: 42 canonical
+  names / 35 archive folders / an alias table). The same concept written two ways
+  (`状态压缩DP` ≡ `状压 DP`) is normalized on both export and import, so the index never
+  splits one concept into two columns.
+- **Unknown names are accepted, not rejected.** Only hard failures bounce (missing manifest
+  fields, unparseable file names, format-gate failures, overwriting existing files). A name the
+  dictionary doesn't know is written to disk **as-is** and listed in a "to-register" report
+  (with the closest canonical-name suggestions) for the maintainer to merge later — an uploader
+  is never turned away because a name didn't line up.
+
+Packs round-trip byte-for-byte; `python tools/selfcheck_import.py` is the gate that proves it
+(export → import into an empty data root → per-file sha256 + reconciliation exit code 0, plus a
+second case covering the "unknown names are accepted" rule).
+
 ## Tools
 
 | Script | Purpose |
@@ -147,15 +183,18 @@ GUI keys: `1`-`6` set state ｜ `Enter` popup ｜ `Ctrl+Z` undo ｜ `Shift+Enter
 | `archive_check.py` | Archive reconciliation, **exit 0 = done** |
 | `index_sync.py` | Generates index tables from record files (single source of truth) |
 | `status_report.py` / `status_gui.py` / `fill_knowledge.py` | Status-table trio (report / GUI / knowledge column) |
+| `export_solution.py` / `import_solution.py` | Solution packs: export a round (or one problem) / import someone else's |
+| `knowledge_dict.py` | Knowledge-point dictionary: canonical names, aliases, suggestions |
+| `selfcheck_import.py` | Gate for import/export (round-trip losslessness + unknown names accepted) |
 | `vizgrid.py` | Terminal character-art engine for algorithm diagrams |
 | `unify_latex.py` / `unpair_ticks.py` / `extract_math.py` + `katex_check.js` | LaTeX trio (convert / clean / render-check) |
 | `check_lost_by_hash.py` | Content-hash reconciliation after file moves |
 
 Full reference (design trade-offs and traps): [knowledge/10-工具链.md](knowledge/10-工具链.md) (Chinese).
 
-## Knowledge base (`knowledge\`, 14 docs, Chinese)
+## Knowledge base (`knowledge\`, 15 docs, Chinese)
 
-Covers the pipeline definition, editorial format + LaTeX rules, the verification protocol, archiving + the cross-round "already taught" ledger, runnable character-art diagrams, from-scratch explanation rules, a falsified verification-log post-mortem, an algorithm pitfall collection, environment setup, and NowCoder scraping notes.
+Covers the pipeline definition, editorial format + LaTeX rules, the verification protocol, archiving + the cross-round "already taught" ledger, runnable character-art diagrams, from-scratch explanation rules, a falsified verification-log post-mortem, an algorithm pitfall collection, environment setup, NowCoder scraping notes, and the knowledge-point dictionary (the single source of truth for concept names).
 
 ## Configuration (config.json)
 
@@ -197,7 +236,7 @@ A deliberately broken counterpart ships in `examples\`: the same format gate fla
 
 ## Contributing
 
-Issues and PRs welcome. Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest` and `selfcheck_unpair.py` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
+Issues and PRs welcome. Before changing a script, run its self-test (`--help` on most; `status_gui.py --selftest`, `selfcheck_unpair.py`, `selfcheck_import.py` and `knowledge_dict.py selftest` are ready-made regressions). Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
 
 ## License
 

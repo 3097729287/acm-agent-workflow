@@ -36,6 +36,9 @@ jobs:
       - name: 索引同步 dry（两处无 diff 才算过）
         run: python tools/index_sync.py dry
 
+      - name: 知识点词典自检（名字规范的唯一出处，数据坏了这里先红）
+        run: python tools/knowledge_dict.py selftest
+
       # 下面两步要编译器/Node，只在 Linux + 单版本上跑，避免矩阵重复
       - name: 交付前复验：md 里的代码四档全跑（GCC）
         if: runner.os == 'Linux' && matrix.python == '3.13'
@@ -53,6 +56,11 @@ jobs:
           cd ..
           python tools/check_solution.py "demo/题解/牛客周赛/Round163/Round163题解.md"
           python tools/check_solution.py "demo/题解/牛客周赛/Round161/Round161题解.md"
+
+      # Linux 这格同时验「包内相对路径一律反斜杠」在 POSIX 分隔符下的落盘（to_os 分支）
+      - name: 题解包导入 / 导出闸门（往返无损 + 未登记名字照收）
+        if: matrix.python == '3.13' && (runner.os == 'Linux' || runner.os == 'Windows')
+        run: python tools/selfcheck_import.py
 
       - name: 反例必须被拦（断言格式闸退出码非 0）
         if: runner.os == 'Linux' && matrix.python == '3.13'
