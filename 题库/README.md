@@ -6,10 +6,15 @@
 题库\
 ├── 题解\牛客周赛\RoundNNN\RoundNNN题解.md   ← 整场题解（每题目录在它旁边）
 ├── 算法\<算法名>\牛客周赛RoundNNN-X-*.md     ← 算法库记录（五节模板）
-└── 索引\题解算法索引.md                      ← 全量索引（反查表 + 场次小节）
+├── 索引\题解算法索引.md                      ← 全量索引（反查表 + 场次小节）
+└── 知识库\06-题解算法归档.md                 ← 归档台账（精简索引 + 算法→文件夹对照表）
 ```
 
-`题解\题目状态.md`（补题状态表）、`索引\题目记录模板.md` 已随骨架放好，`索引\题解算法索引.md` 是空索引。
+`题解\题目状态.md`（补题状态表）、`索引\题目记录模板.md` 已随骨架放好。
+
+**为什么这里自带一份 `知识库\`**：归档台账里的「共 N 条」是对**某一个数据根**说的。
+仓库的 `knowledge\` 描述自带示例 `demo\`（CI 的示例闸门按它核对）；题库这一份描述题库自己。
+两个根各带各的台账，谁也不会把谁的数字改掉——**往题库导包时记得带 `--mem 题库/知识库`**。
 
 ## 怎么用
 
@@ -24,25 +29,29 @@ python tools/status_gui.py                    # 打开图形端；菜单「题�
 **把包导进这里**（维护者动线，本仓库自己的数据根）：
 
 ```bash
-python tools/import_solution.py <包.zip> --root 题库        # dry：先看报告
-python tools/import_solution.py <包.zip> --root 题库 --apply # 确认后落盘
-python tools/archive_check.py RoundNNN --root 题库 --status 题库/题解/题目状态.md  # 退出码 0 = 收工
+python tools/import_solution.py <包.zip> --root 题库 --mem 题库/知识库        # dry：先看报告
+python tools/import_solution.py <包.zip> --root 题库 --mem 题库/知识库 --apply # 确认后落盘
+python tools/archive_check.py RoundNNN --root 题库 --status 题库/题解/题目状态.md --mem 题库/知识库
+# ↑ 退出码 0 = 收工
 ```
 
 图形端同理：`status_gui.py --file 题库/题解/题目状态.md` 打开，菜单「题解包 → 导入题解包…」选包，
 报告里点「应用到数据根」。
 
-## 为什么现在是空的
+## 现在有什么
 
-空目录 = **还没合并过任何外部贡献**。题解由贡献者按《[CONTRIBUTING.md](../CONTRIBUTING.md)》
-打包投递，维护者 review 后导入——**导入器会给每一处落盘留下机器可查的痕迹**
-（反查表、题解指针、状态表行、`archive_check` 退出码 0），不是手工往文件夹里丢文件。
+首批 9 场牛客周赛（Round 123 / 124 / 140 / 143 / 155 / 159 / 161 / 162 / 163，共 43 道非签到题）
+是维护者自己的题解，按同一套六步流程做出来后整场收录进来的——**和外部贡献走的是同一个导入器**，
+每一处落盘都留下机器可查的痕迹（反查表、题解指针、状态表行、`archive_check` 退出码 0），
+不是手工往文件夹里丢文件。
 
-`题解\牛客周赛\.gitkeep` 和 `算法\.gitkeep` 只是让空目录能进 git，导入第一个包之后它们可以删。
+外部贡献走《[CONTRIBUTING.md](../CONTRIBUTING.md)》：把导出的包放进 `contributions\` 提 PR，
+CI 先替你把包校验一遍；维护者 review 后导入。
 
 ## 注意
 
 - 这个目录是**数据根**，不是仓库代码的一部分：里面的题解归贡献者（按 MIT 发布，署名在 manifest 里）；
 - 跑工具时 `--root` 记得指到 `题库`（或者 `install.py --data-root 题库` 之后省掉 `--root`），
   否则默认动的还是自带示例 `demo\`；
+- **`--mem 题库/知识库` 也要一起带上**（台账跟着数据根走，理由见上）；
 - 导入会写文件 / 索引 / 状态表 / 台账四处，写前自动备份（备份落在 `config.json` 的 `backup_root`）。

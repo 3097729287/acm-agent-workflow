@@ -45,7 +45,15 @@ STATUS_HEADER = archive_check.STATUS_HEADER
 PLACEHOLDER = "（归档第一场后逐行补）"
 RE_URL = re.compile(r"^https://ac\.nowcoder\.com/acm/contest/(\d+)/([A-Z])$")
 RE_DIFF = re.compile(r"^CF\s*\d+$")
-RE_PTR_MARK = re.compile(r"（指针）\s*\|?\s*$")
+RE_PTR_MARK = re.compile(r"（指针[^）]*）\s*\|?\s*$")
+# 反查表里「记录不在本行文件夹」的那些链接：`（指针）` 挨个跟在自己的链接后面，还能带
+# 备注（如 `（指针，有向图最短路）`）。判据是**本题链接后面紧跟的那个标记**，不是行尾。
+RE_PTR_LINK = re.compile(r"\]\((https?://[^)\s]+)\)\s*（指针[^）]*）")
+
+
+def norm_url(u):
+    """链接比对用：去空白、去末尾斜杠。"""
+    return (u or "").strip().rstrip("/")
 
 
 def rd(p):
@@ -356,12 +364,25 @@ def gen_back_rows(kd, it):
 
 
 def ptr_lines(kd, it):
-    """本题反查表里标了「（指针）」的行 → 该在对应文件夹的题解指针.md 里补的行"""
+    """本题反查表里标了「（指针）」的行 → 该在对应文件夹的题解指针.md 里补的行
+
+    反查表的一行可以**列好几道题**，`（指针）` 挨个标在「记录不在本行文件夹」的那几个
+    链接后面（还可能带备注，如 `（指针，有向图最短路）`）。所以判据 = **本题链接后面
+    紧跟的那个标记**，既不能看行尾（一行里三处标记、只有最后一处落在行尾 —— 漏出来就是
+    archive_check 的「4 题解指针-反查表回验」），也不能靠「这行在谁的 back_rows 里」认人
+    （manifest 带来的 `back_rows` 是**整场共用**的，每道题挂同一批行，那样会给一行里
+    没标指针的题也出指针 —— 现象：`算法\\并查集\\题解指针.md` 冒出「D 小红的排序：
+    `并查集\\`」这种指回自己的死指针）。
+    """
     out = []
     for r in rows_for(kd, it):
-        f, isptr = row_folder(r)
-        if isptr and f:
-            out.append((f, "- %s %s：`%s%s`" % (it.letter, it.title, it.folder, BS)))
+        f, _ = row_folder(r)
+        if not f:
+            continue
+        if not any(norm_url(m.group(1)) == norm_url(it.url)
+                   for m in RE_PTR_LINK.finditer(r)):
+            continue
+        out.append((f, "- %s %s：`%s%s`" % (it.letter, it.title, it.folder, BS)))
     return out
 
 

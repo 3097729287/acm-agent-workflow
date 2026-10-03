@@ -77,7 +77,7 @@ PR 里 CI 会自动跑 `python tools/check_contributions.py`（跑在 Ubuntu / W
 
 ## 合并之后会发生什么
 
-维护者按一次键（图形端菜单「题解包 → 导入题解包…」或命令行 `import_solution.py <包> --root 题库 --apply`）：
+维护者按一次键（图形端菜单「题解包 → 导入题解包…」或命令行 `import_solution.py <包> --root 题库 --mem 题库/知识库 --apply`）：
 
 1. 文件落进 `题库\`（题解区 + 算法库）；
 2. 索引反查表、题解指针、状态表行、06 对照表自动补上；
