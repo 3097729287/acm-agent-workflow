@@ -5,10 +5,10 @@ check_solution —— 题解 md 交付前的自检器
 
     python check_solution.py <题解.md> [<题解2.md> ...] [--no-compile] [--quiet]
 
-非题解类文档（规划 / 调研 md）加 `--no-record`：跳过第 6 / 9 / 10 / 11 项
+非题解类文档（规划 / 调研 md）加 `--no-record`：跳过第 6 / 9 / 10 / 11 / 18 项
 （这些是「整场题解」专有口径）。
 
-一趟查完 17 项，**每项都要给出原文片段**（只报「有/无」的检查不合格，
+一趟查完 18 项，**每项都要给出原文片段**（只报「有/无」的检查不合格，
 口径一歪差异看不出来，见《数学 LaTeX》）：
 
   1.  `$` **配对**：正文（去代码块、去行内代码）里成对的 `$...$` 抠掉后还剩
@@ -42,6 +42,10 @@ check_solution —— 题解 md 交付前的自检器
   17. **KaTeX 全量渲染**：每个公式（含跨行 `$$` 块）真渲染一遍 —— 公式
       **内部**的命令拼错 / 花括号不配，第 1 / 1b / 2 项都不看公式内部，
       只有它能抓（2026-10-02 加；管线 = extract_math + node katex_check.js）
+  18. 目录表「考点」列必须是**知识点 v2 规范串**（已登记标准名 + `；` / ` + ` /
+      `[…]` / `[主]` `[次]` 语法）——直接跑 knowledge_dict 的自动归一，与状态表
+      「知识点」列**同一套口径**；含未登记名也报出来（逼着收编或改写法）。
+      口径出处 = 知识库《15-知识点词典》第五节（2026-10-05 加；字典不在 → 跳过）
 
 注意：**裸的 Unicode 数学符号（≤ ≥ ≈ × 等）不查**——它们要么是中文叙述里的
 连接符（「A → B」），要么是 unify_latex 有意放弃的片段（中文截断 / 括号不平衡），
@@ -76,6 +80,10 @@ try:
     import extract_math as _EM                        # 第 17 项：公式抽取，
 except Exception:                                     # 与 KaTeX 验证管线同一套
     _EM = None
+try:
+    import knowledge_dict as _KD                      # 第 18 项：考点列归一，
+except Exception:                                     # 与状态表「知识点」同一套
+    _KD = None
 
 # 无歧义 LaTeX 命令表：只列**绝不可能是 Windows 路径片段**的。
 # `\build`、`\crosscheck`、`\max_*.in` 这类一概不进表，否则天天误报。
@@ -571,6 +579,62 @@ def check_dir_table(text, rep):
         rep.ok("10.", "目录表合标准（%s，%d 行数据）" % (" | ".join(DIR_HEAD), nrow), [])
 
 
+def check_knowledge(text, rep):
+    """第 18 项：目录表「考点」列必须是知识点 v2 规范串。
+
+    判定 = 直接跑 knowledge_dict 的自动归一（与状态表「知识点」列同一套口径）：
+    已规范的串归一后**逐字不变**；含未登记名 / 旧格式 / 括号说明 / 别名写法
+    的串，归一出不同结果 → 报「应为」。口径出处 = 知识库《15-知识点词典》第五节。
+    考点列是数据字段、不得含 LaTeX `$`（目录表已被 unify_latex 豁免，不再转它）。
+    字典 / 词典读不到（仓库或精简环境）→ 跳过本项。
+    """
+    if _KD is None:
+        rep.na("18.", "knowledge_dict.py 不在同目录，跳过考点列检查")
+        return
+    try:
+        kd = _KD.load()
+    except Exception as e:
+        rep.na("18.", "知识点词典读不到（%s），跳过考点列检查" % e.__class__.__name__)
+        return
+    lines = text.split("\n")
+    try:
+        i0 = next(i for i, l in enumerate(lines) if l.strip() == "## 目录")
+    except StopIteration:
+        rep.na("18.", "没有「## 目录」小节，跳过考点列检查")
+        return
+    i1 = next((i for i in range(i0 + 1, len(lines))
+               if lines[i].startswith("## ")), len(lines))
+    prob, nrow = [], 0
+    for i in range(i0, i1):
+        s = lines[i].strip()
+        if not (s.startswith("|") and s.endswith("|")):
+            continue
+        if re.match(r"^[\s\-|]+$", s):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if len(cells) != 4 or not re.match(r"^[A-Z]$", cells[0]):
+            continue                                  # 表头 / 异常行交给第 10 项
+        nrow += 1
+        cell = cells[2]
+        if "$" in cell:
+            prob.append("  第 %d 行：考点列是数据字段（要与状态表逐字一致），不要写 LaTeX "
+                        "数学标记 $（unify_latex 已豁免目录表，正常不会再转）：%s"
+                        % (i + 1, cell))
+            cell = cell.replace("$", "")       # 剥掉后继续归一出「应为」
+        unk = []
+        got = kd.norm_name(cell, unknown=unk)
+        if unk:
+            prob.append("  第 %d 行：考点含未登记名 %s（收编进词典或改写法）：%s"
+                        % (i + 1, "、".join("「%s」" % u for u, _ in unk), cell))
+        if got != cell:
+            prob.append("  第 %d 行：考点不是规范 v2 串\n      现状：%s\n      应为：%s"
+                        % (i + 1, cell, got))
+    if prob:
+        rep.bad("18.", "目录表考点列不合知识点 v2 规范（%d 处）" % len(prob), prob[:12])
+    else:
+        rep.ok("18.", "考点列全部合知识点 v2 规范（%d 行）" % nrow, [])
+
+
 def check_order(text, rep):
     """每道题内 `###` 的**顺序**必须合标准，且 题意/思路/参考代码/易错点 四项必写。"""
     lines = text.split("\n")
@@ -732,11 +796,13 @@ def check_file(path, tmpdir, no_record=False):
         rep.na("9.", "节白名单检查被 --no-record 跳过（非题解类文档）")
         rep.na("10.", "目录表检查被 --no-record 跳过（非题解类文档）")
         rep.na("11.", "小节顺序检查被 --no-record 跳过（非题解类文档）")
+        rep.na("18.", "考点列检查被 --no-record 跳过（非题解类文档）")
     else:
         check_record(text, rep)
         check_sections(text, rep)
         check_dir_table(text, rep)
         check_order(text, rep)
+        check_knowledge(text, rep)
     check_bytes(path, rep)
     check_tables(text, rep)
     check_indent_block(text, rep)
@@ -752,7 +818,7 @@ def main(argv=None):
                     help="跳过实测记录与节白名单检查（非题解类文档，如规划/调研 md）")
     ap.add_argument("--quiet", action="store_true", help="只打印有问题的项")
     ap.add_argument("--list", action="store_true",
-                    help="只打印 17 项检查清单就退出（不用给文件）")
+                    help="只打印 18 项检查清单就退出（不用给文件）")
     a = ap.parse_args(argv)
     if a.list:
         print(__doc__)

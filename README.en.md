@@ -2,7 +2,7 @@
 
 **An upsolving pipeline for competitive programming — from fetching the statement to archiving the write-up, driven end-to-end by an AI agent, with a machine gate at every step.**
 
-Not "please be careful, agent" — **run one command, read the exit code**: every measured number comes verbatim from a real run, the editorial format is checked item by item (17 checks), and archiving only counts as done when the reconciliation exits 0. You just review.
+Not "please be careful, agent" — **run one command, read the exit code**: every measured number comes verbatim from a real run, the editorial format is checked item by item (18 checks), and archiving only counts as done when the reconciliation exits 0. You just review.
 
 [![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [中文](README.md) ｜ [Online docs](https://3097729287.github.io/acm-agent-workflow/) ｜ [MIT](LICENSE) ｜ **v0.1.0 (early preview)** — feedback welcome via [Issues](https://github.com/3097729287/acm-agent-workflow/issues)
 
@@ -57,7 +57,7 @@ Open this directory with your agent (with Claude Code, just `cd` into it) and sa
 
 (A whole-contest Luogu URL works the same way.) It walks the six steps by itself:
 
-**fetch statement → calibrate depth → write code + verification driver → four-tier verification → write editorial + 17-item self-check → re-verify + archive reconciliation**
+**fetch statement → calibrate depth → write code + verification driver → four-tier verification → write editorial + 18-item self-check → re-verify + archive reconciliation**
 
 You only look at two things: **the measured numbers it reports** (they must come verbatim from a real run) and **exit code 0**.
 
@@ -106,7 +106,7 @@ git clone https://github.com/3097729287/acm-agent-workflow
 cp -r acm-agent-workflow/skills/check-solution ~/.claude/skills/
 ```
 
-Then say "run the editorial QC on 我的题解.md": 17 format checks, every complaint carries a line number and the offending sentence. See [skills/check-solution/README.md](skills/check-solution/README.md) (Chinese).
+Then say "run the editorial QC on 我的题解.md": 18 format checks, every complaint carries a line number and the offending sentence (item 18 = the 「考点」 column of the directory table must be a canonical knowledge-point v2 string — the same normalization as the 「知识点」 column of the status table; the single source of the rules is section 5 of `knowledge/15-知识点词典.md`). See [skills/check-solution/README.md](skills/check-solution/README.md) (Chinese).
 
 **Hacking on the code**: run the matching self-test first (most scripts take `--help`): `status_gui.py --selftest`, `selfcheck_filter.py`, `selfcheck_import.py`, `check_contributions.py`, `knowledge_dict.py selftest`, `fetch_problem.py --selftest`. Note that `verify_<letter>.py` drivers have **no `--help`** — running one with no arguments *is* the verification.
 
@@ -115,7 +115,7 @@ Then say "run the editorial QC on 我的题解.md": 17 format checks, every comp
 | Gate | Command | Passing means |
 |---|---|---|
 | Verification | `verify_<letter>.py` | Four tiers (samples / edge cases / stress test / time limits) each report **measured numbers** |
-| Format | `check_solution.py <md>` | All 17 checks pass, each reporting the offending line and sentence |
+| Format | `check_solution.py <md>` | All 18 checks pass, each reporting the offending line and sentence |
 | Archive | `archive_check.py RoundNNN` | **Exit code 0** = algorithm library, indexes and knowledge base all reconcile |
 | Install | `python install.py --check` | Runs every gate against the bundled sample (check only — writes nothing) |
 
@@ -157,10 +157,10 @@ This is not a slide deck — it's the author's daily pipeline: **9 NowCoder week
 | 2. Calibrate | consults the "already taught" ledger + the tier table | what to explain, how deep | — |
 | 3. Code | one folder per problem `RoundN\<range>\<letter>\` | `x.cpp` + brute force + `verify_x.py` | — |
 | 4. Verify | `python verify_x.py` | four tiers of real numbers | all pass, numbers from real runs |
-| 5. Write-up + self-check | `python tools/check_solution.py <md>` | `RoundN题解.md` | 17/17 checks |
+| 5. Write-up + self-check | `python tools/check_solution.py <md>` | `RoundN题解.md` | 18/18 checks |
 | 6. Re-verify + archive | `python tools/md_full.py <md> <letter>` → `archive_check.py RoundN` | library records / indexes / status table | **exit code 0** |
 
-<img src="docs/demo-gates.gif" width="900" alt="Recorded run of check_solution.py: 17 checks, all clear">
+<img src="docs/demo-gates.gif" width="900" alt="Recorded run of check_solution.py: all checks clear">
 
 One round, one self-contained folder:
 
@@ -202,7 +202,7 @@ Prefer not to touch the CLI: the GUI menu has **Import pack… / Export pack… 
 | `new_round.py` | New-round skeleton (folders + markdown shell; idempotent, never overwrites) |
 | `verify.py` | Four-tier verification driver: compile → samples → edge cases → stress test → time limits |
 | `md_full.py` | Pre-delivery re-verification of the code **as pasted in the editorial** |
-| `check_solution.py` | The 17-check format gate for the editorial (line number + offending sentence per complaint) |
+| `check_solution.py` | The 18-check format gate for the editorial (line number + offending sentence per complaint; item 18 = the 「考点」 column of the directory table must be a canonical knowledge-point v2 string, same normalization as the status table's 「知识点」 column, source of the rules = section 5 of `knowledge/15-知识点词典.md`) |
 | `archive_check.py` | Archive reconciliation, **exit 0 = done** |
 | `index_sync.py` | Generates index tables from record files (single source of truth) |
 | `status_report.py` / `status_gui.py` / `fill_knowledge.py` | Status-table trio (report + filtering / GUI / knowledge column) |
@@ -211,7 +211,7 @@ Prefer not to touch the CLI: the GUI menu has **Import pack… / Export pack… 
 | `knowledge_dict.py` | Knowledge-point dictionary: canonical names, aliases, suggestions |
 | `selfcheck_import.py` | Gate for import/export (round-trip losslessness + unknown names accepted) |
 | `check_contributions.py` | Validates every pack in `contributions\` inside a throwaway data root (runs in CI) |
-| `skills/check-solution` | Editorial QA skill: packages the 17-check format gate as "clone and use" |
+| `skills/check-solution` | Editorial QA skill: packages the 18-check format gate as "clone and use" |
 | `vizgrid.py` | Terminal character-art engine for algorithm diagrams |
 | `unify_latex.py` / `unpair_ticks.py` / `unpair_ticks_relaxed.py` / `extract_math.py` + `katex_check.js` | LaTeX tooling (convert / strip backticks / render-check) |
 | `check_lost_by_hash.py` | Content-hash reconciliation after file moves (comparing by filename lies) |
@@ -239,7 +239,7 @@ Covers the pipeline definition, editorial format + LaTeX rules, the verification
 
 ## Platforms and CI
 
-The core pipeline is CI-green on three platforms (Ubuntu / macOS / Windows × Python 3.9 / 3.13): env check, sample gates, index sync, dictionary self-test and scraping self-test run on all six cells; four-tier re-verification, the 17-check format gate (with KaTeX rendering), the counter-example assertion and the Action entry's three exit codes run on Linux + 3.13; solution-pack round-trip and contribution validation run on Linux / Windows + 3.13.
+The core pipeline is CI-green on three platforms (Ubuntu / macOS / Windows × Python 3.9 / 3.13): env check, sample gates, index sync, dictionary self-test and scraping self-test run on all six cells; four-tier re-verification, the 18-check format gate (with KaTeX rendering), the counter-example assertion and the Action entry's three exit codes run on Linux + 3.13; solution-pack round-trip and contribution validation run on Linux / Windows + 3.13.
 
 The Tkinter GUI and some `.cmd` helpers are Windows-oriented; on Linux, install `python3-tk` if the GUI complains about tkinter. All paths come from config.
 

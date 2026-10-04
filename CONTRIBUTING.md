@@ -35,7 +35,7 @@ python tools/check_contributions.py --pack 你的包.zip
 | 1 | 有硬伤 | 报告里逐项写了行号 / 原因，改完重打 |
 | 2 | 读不了 | 多半不是 zip、或者缺 `manifest.json` |
 
-打回级硬伤：manifest 字段缺 / 拼错（`difficulty` 要写成 `CF 900` 这样）、题解 md 没过 17 项格式闸（`python tools/check_solution.py <md>` 能看逐项行号）、目标位置已有同一题（防覆盖）、`url` 末尾字母与 `letter` 对不上。
+打回级硬伤：manifest 字段缺 / 拼错（`difficulty` 要写成 `CF 900` 这样）、题解 md 没过 18 项格式闸（`python tools/check_solution.py <md>` 能看逐项行号）、目标位置已有同一题（防覆盖）、`url` 末尾字母与 `letter` 对不上。
 **不会被打回的**：知识点 / 文件夹名不在词典里——照收，只列进「待登记清单」，维护者合并时收编；算法记录不带——生成「精简记录」（头部齐、正文标注「未附」）；四档验证没跑——实测记录节如实写「未验证」就行。
 
 ## 第 3 步：交出去

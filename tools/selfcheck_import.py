@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""selfcheck_import —— 题解导入/导出的机器闸门（设计 §4.4 验收）
 
-    python tools\selfcheck_import.py            # 全跑（含 17 项闸门，约 2~3 分钟）
+    python tools\selfcheck_import.py            # 全跑（含 18 项闸门，约 2~3 分钟）
     python tools\selfcheck_import.py --fast     # 跳过 check_solution（只验管道，约 20 秒）
 
 两项验收，各在一个**临时空数据根**里真跑一遍（不碰 config.json 指的数据根）：
@@ -185,7 +185,7 @@ def t_unknown(base, root_src, fast):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="导入/导出 机器闸门（自检）")
     ap.add_argument("--root", default=toolutil.DATA_ROOT, help="源数据根（缺省 config.json 的 demo）")
-    ap.add_argument("--fast", action="store_true", help="跳过 check_solution 的 17 项闸门")
+    ap.add_argument("--fast", action="store_true", help="跳过 check_solution 的 18 项闸门")
     ap.add_argument("--keep", action="store_true", help="留着临时目录（排查用）")
     a = ap.parse_args(argv)
     src = a.root.replace("/", os.sep)

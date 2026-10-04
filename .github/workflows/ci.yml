@@ -53,7 +53,7 @@ jobs:
           python tools/md_full.py "demo/题解/牛客周赛/Round161/Round161题解.md" D --force
           python tools/md_full.py "demo/题解/牛客周赛/Round161/Round161题解.md" E --force
 
-      - name: 题解格式闸门 17 项（含 KaTeX 渲染）
+      - name: 题解格式闸门 18 项（含 KaTeX 渲染）
         if: runner.os == 'Linux' && matrix.python == '3.13'
         run: |
           cd tools
