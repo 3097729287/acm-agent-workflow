@@ -6,7 +6,7 @@ r"""import_solution —— 导入一个标准「题解包」（默认只校验�
     python tools\import_solution.py <包> --apply --root <数据根>     # 指定数据根
 
 **分级门槛**（设计口径，「硬」不合格就打回）：
-  硬 │ 包可读 + manifest 字段齐 ｜ 题解 md 过 `check_solution.py` 17 项 ｜
+  硬 │ 包可读 + manifest 字段齐 ｜ 题解 md 过 `check_solution.py` 18 项 ｜
        文件名 / 标题行能解析 ｜ 目标位置没有同题（防覆盖）｜ 记录 md 与 manifest 一致
   软 │ 知识点未登记 → **不拒收**：照收 + 进「待登记清单」（附最接近的标准名建议）
   可缺省 │ 算法记录（生成「精简记录」，标注 收录级别：精简）
@@ -249,13 +249,13 @@ def validate(pack_dir, root, rep, mem, check_sol=True):
                                            capture=True)
             tail = out.strip().splitlines()
             if rc == 0:
-                rep.ok("4 题解 md", "%s 过 17 项自检（%s）"
+                rep.ok("4 题解 md", "%s 过 18 项自检（%s）"
                        % (md_rel, tail[-1].strip("— ") if tail else "退出码 0"))
             else:
                 rep.bad("4 题解 md", "%s 没过 check_solution.py（退出码 %d）：%s"
                         % (md_rel, rc, " ｜ ".join(x for x in tail[-4:] if x.strip())))
         else:
-            rep.warn("4 题解 md", "按 --no-check-solution 跳过了 17 项闸门")
+            rep.warn("4 题解 md", "按 --no-check-solution 跳过了 18 项闸门")
     else:
         rep.bad("4 题解 md", "包里没有 %s（题解包必须带整场题解 md）" % md_rel)
 
@@ -624,7 +624,7 @@ def main(argv=None):
     ap.add_argument("--mem", default=os.path.join(toolutil.REPO_ROOT, "knowledge"),
                     help="知识库目录（06 精简索引的落点）")
     ap.add_argument("--no-check-solution", action="store_true",
-                    help="跳过题解 md 的 17 项闸门（只在自己已跑过时用）")
+                    help="跳过题解 md 的 18 项闸门（只在自己已跑过时用）")
     a = ap.parse_args(argv)
     root = a.root.replace("/", os.sep)
     kd = knowledge_dict.load()

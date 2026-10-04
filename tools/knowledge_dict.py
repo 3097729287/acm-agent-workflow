@@ -12,10 +12,20 @@ r"""knowledge_dict —— 知识点词典的解析器 + 归一/校验的唯一�
     python knowledge_dict.py check 状态压缩DP 差分 李超线段树   # 查词：标准名 / 别名映射 / 建议
     python knowledge_dict.py selftest                            # 数据自检（词典本身 + 归一行为）
 
-归一口径（2026-10-03 定稿）：
-  · 按顶层 `+` / `、` 拆 → 去（括号）说明 → 别名映射 → 命中删除表就删 → 拼 `主 ｜ 次1、次2`
-  · 首字母缩写大写（dfs → DFS）；全角竖线 U+FF5C 作分隔符（半角会切断 md 表格）
+归一口径（2026-10-05 二次修订：**v2 格式** —— `；` 分解法、`+` 组内、`[..]` 打包、`[主]/[次]` 标注）：
+  · 按顶层 `；`（半角 `;` 也认）分解法组 → 组内按顶层 `+` / `、` 拆项（旧分隔符 `｜`
+    宽容视同 `+`）→ 剥掉尾部 `[主]` / `[次]` 标注（`(主)`、`（主）` 也认，转正成 `[主]`）
+    → 去（括号）说明 → 别名映射 → 命中删除表就删 → **组合名展开**（「前缀和与差分」→
+    「前缀和 + 差分」，表在词典第三节）→ 修饰兜底 → 按原结构拼回（组间 ` ； `、组内 ` + `）
+  · **修饰兜底**：段以某个已登记名字（标准名/别名）**开头或结尾**、且还剩修饰字
+    → 归到它（`分组前缀和` → `前缀和`、`枚举一维` → `枚举`、`迭代 DFS` → `DFS`）。
+    候选按长度降序（最长优先）；删除表**先于**兜底判定（`DFS 枚举因子` 整段删，不会
+    被吃成 `DFS`）。兜底命中 = 未经收编的自动映射，调用方可收进 mapped 报告核对。
+  · 归一后仍非标准名的段**原样保留** + 进 unknown 报告（写状态表/归档对账会拦）。
+  · 首字母缩写大写（dfs → DFS）；`[…]` 与标注原样保留（打包组内可嵌套、递归归一）
   · 别名的匹配对大小写与空格不敏感（`状态压缩 dp` ≡ `状态压缩dp`）
+  · 模块级 `split_names()` = 显示串 → 纯名字列表（剥结构与标注；export 生成 manifest
+    的 knowledge 数组用它）
 """
 import argparse
 import difflib
@@ -26,10 +36,15 @@ import sys
 import toolutil  # 同目录：REPO_ROOT + parse_contest（场次键的唯一解析）
 
 DEFAULT_PATH = os.path.join(toolutil.REPO_ROOT, "knowledge", "15-知识点词典.md")
-BAR = "｜"          # 全角竖线
-PUNCT = "、"        # 顿号
+BAR = "｜"          # 全角竖线（旧格式分隔符：宽容视同 `+`；新写法不要再用）
+SEMI = "；"         # 全角分号（v2 解法分隔符）
+PUNCT = "、"        # 顿号（视同 `+`）
 BS = chr(92)            # 反斜杠
 NO_FOLDER = ("—", "-", "–", "", "无", "（无）")
+
+_OPEN = "（([【"     # 括号深度（split 时不拆层内的分隔符）；`【】` 是 `[]` 的宽容写法
+_CLOSE = "）)]】"
+_ANNOT_RE = re.compile(r"[\[【(（]\s*(主|次)\s*[\]】)）]\s*$")
 
 
 # ---------------------------------------------------------------- md 表格小工具
@@ -63,20 +78,66 @@ def _tables(lines):
 
 # ---------------------------------------------------------------- 归一算法（算法性小工具，不是词表）
 def split_top(s):
-    """按顶层 `+` / `、` 拆分（括号内的不算）"""
+    """按顶层 `+` / `、`（含旧式 `｜`）拆分；括号与 `[]` 内的不算"""
     out, buf, depth = [], "", 0
     for ch in s:
-        if ch in "（(":
+        if ch in _OPEN:
             depth += 1
-        elif ch in "）)":
+        elif ch in _CLOSE:
             depth = max(0, depth - 1)
-        if ch in ("+", "、") and depth == 0:
+        if ch in ("+", "、", BAR) and depth == 0:
             out.append(buf)
             buf = ""
             continue
         buf += ch
     out.append(buf)
     return [x.strip() for x in out if x.strip()]
+
+
+def split_groups(s):
+    """按顶层 `；` / `;` 分解法组（v2 解法分隔；括号与 `[]` 内的不算）"""
+    out, buf, depth = [], "", 0
+    for ch in s:
+        if ch in _OPEN:
+            depth += 1
+        elif ch in _CLOSE:
+            depth = max(0, depth - 1)
+        if ch in (SEMI, ";") and depth == 0:
+            out.append(buf)
+            buf = ""
+            continue
+        buf += ch
+    out.append(buf)
+    return [x.strip() for x in out if x.strip()]
+
+
+def _split_annot(s):
+    """剥尾巴上的主次标注 → (主体, 标注)。`[主]`/`(主)`/`（主）`/`【主】` 都认，
+    统一转正成 `[主]` / `[次]`；没有标注 → (s, "")。"""
+    m = _ANNOT_RE.search(s)
+    if not m:
+        return s.strip(), ""
+    return s[:m.start()].strip(), "[%s]" % m.group(1)
+
+
+def split_names(s):
+    """知识点串（v2 格式）→ 纯名字列表：去掉 `；`/`+`/`[]` 结构与 `[主]`/`[次]` 标注，
+    保序去重。纯语法操作、不查词表——export 生成 manifest 的 knowledge 数组用它。"""
+    out = []
+
+    def walk(seg):
+        for p in split_top(seg):
+            body, _ = _split_annot(p)
+            if not body:
+                continue
+            if body[0] in "[【" and body[-1] in "]】":
+                walk(body[1:-1])
+            elif body not in out:
+                out.append(body)
+
+    for g in split_groups(s):
+        walk(g)
+    return out
 
 
 def strip_paren(s):
@@ -100,7 +161,9 @@ class KnowledgeDict(object):
         self._std_ci = {}        # {_key(标准名): 标准名}
         self.drop_exact = set()
         self.drop_sub = []
+        self.expand = {}         # {_key(组合名): [标准名, …]}（组合名展开表：一名拆多名）
         self.final = {}          # {(比赛名, 场次号, 字母): 知识点串}
+        self._cands = []         # [(key, 标准名)] 兜底候选，按长度降序
         self._parse()
         self._validate()
 
@@ -123,9 +186,12 @@ class KnowledgeDict(object):
                     self.standards.append((name, folder))
                     if folder:
                         self.folders[name] = folder
-                        if _key(folder) in self.folder_names:
+                        # 两个标准名共用一个文件夹是合法的（如「前缀和」「差分」共用
+                        # `前缀和与差分\`）；只拦「同键却是不同写法」的不一致
+                        kf = _key(folder)
+                        if kf in self.folder_names and self.folder_names[kf] != folder:
                             raise ValueError("词典里文件夹重复：`%s`" % folder)
-                        self.folder_names[_key(folder)] = folder
+                        self.folder_names[kf] = folder
                     if _key(name) in self._std_ci:
                         raise ValueError("词典里标准名重复：%s" % name)
                     self._std_ci[_key(name)] = name
@@ -163,9 +229,15 @@ class KnowledgeDict(object):
                         continue
                     name, rnd = toolutil.parse_contest("%s %s" % (c[0], c[1]))
                     if name is None:
-                        raise ValueError("词典第三节场次认不出：%s %s（要写 `Round N`）"
+                        raise ValueError("词典定稿表场次认不出：%s %s（要写 `Round N`）"
                                          % (c[0], c[1]))
                     self.final[(name, rnd, c[2].upper())] = c[3]
+            elif head[0] == "组合名":
+                # 组合名展开表（可选表；表在 = 内容必须合法，校验见 _validate）
+                for c in tb[1:]:
+                    if _is_sep(c) or len(c) < 2 or not c[0]:
+                        continue
+                    self.expand[_key(c[0])] = split_top(c[1])
             # 其它表格（如说明用的）忽略
         if seen_hdr != {"std", "drop", "final"}:
             raise ValueError("词典缺表：%s" % ("、".join(sorted({"std", "drop", "final"} - seen_hdr))))
@@ -182,6 +254,21 @@ class KnowledgeDict(object):
         for a, n in self.alias.items():
             if n not in self.folders and n not in std_names:
                 raise ValueError("别名指向不存在的标准名：%s" % n)
+        # 组合名展开表（可选表）：展开目标必须都是标准名；组合名不能与标准名/别名撞车
+        for k, segs in self.expand.items():
+            for x in segs:
+                if self.canonical(x) != x:
+                    raise ValueError("组合名展开表：`%s` 展开出的「%s」不是标准名" % (k, x))
+            if k in self._std_ci or k in self.alias:
+                raise ValueError("组合名「%s」与标准名/别名撞车（只能登记在一处）" % k)
+        # 兜底候选表：标准名 + 别名 → 标准名，按 key 长度降序（最长优先）。
+        # 标准名先入（setdefault）——同键时标准名赢，与精确查询口径一致。
+        cands = {}
+        for name, _ in self.standards:
+            cands.setdefault(_key(name), name)
+        for a, n in self.alias.items():
+            cands.setdefault(a, n)
+        self._cands = sorted(cands.items(), key=lambda x: -len(x[0]))
 
     # ---- 查询 ----
     def canonical(self, name):
@@ -206,6 +293,21 @@ class KnowledgeDict(object):
         if not m:
             return None
         return self._std_ci.get(m[0]) or self.alias.get(m[0])
+
+    def _wrap_hit(self, s):
+        """修饰兜底：段以某个已登记名字**开头或结尾**（还剩修饰字）→ 该名字的标准名。
+
+        `分组前缀和` → `前缀和`（`前缀和` 收尾）、`枚举一维` → `枚举`（`枚举` 开头）、
+        `迭代 DFS` → `DFS`。候选按长度降序（最长优先，`换根dp` 赢 `dp`）；
+        段与候选等长时不在此处理（精确查询在前）。认不出 → None。
+        """
+        k = _key(s)
+        if not k:
+            return None
+        for ck, std in self._cands:
+            if len(ck) < len(k) and (k.startswith(ck) or k.endswith(ck)):
+                return std
+        return None
 
     def resolve_folder(self, folder):
         """manifest 的 folder 字段 → 标准归档文件夹。
@@ -241,31 +343,71 @@ class KnowledgeDict(object):
         return None, "未登记"
 
     # ---- 归一 ----
-    def norm_name(self, alg):
-        """自动归一（新场次用）：别名映射 → 删细节短语 → 拼 `主 ｜ 次1、次2`"""
-        parts = []
-        for p in [strip_paren(x) for x in split_top(alg or "")]:
-            p = p.strip()
-            if not p:
-                continue
-            p = self.canonical(p) or p
-            if p in self.drop_exact or any(s in p for s in self.drop_sub):
-                continue
-            if p not in parts:
-                parts.append(p)
-        if not parts:
-            return ""
-        parts = [re.sub(r"\b(dfs|bfs|dp|lca|rmq)\b", lambda m: m.group(1).upper(), p)
-                 for p in parts]
-        res = parts[0]
-        if len(parts) > 1:
-            res += " " + BAR + " " + PUNCT.join(parts[1:])
-        return res
+    def _norm_item(self, item, unknown, mapped):
+        """解法组内的一个项 → 归一后的项列表（通常 1 个；被删空 = 0 个；组合名展开 = 多个）
 
-    def final_knowledge(self, contest, rnd, letter, alg):
-        """定稿表优先（人工过审）；查不到 → 自动归一"""
+        项 = `名字 [标注]` 或 `[子组] [标注]`（打包组递归回 _norm_group）。
+        """
+        body, ann = _split_annot(item)
+        if not body:
+            return []
+        if body[0] in "[【" and body[-1] in "]】":        # 打包组：递归；组内全被删 → 整组删
+            inner = self._norm_group(body[1:-1], unknown, mapped)
+            return ["[%s]%s" % (inner, ann)] if inner else []
+        p = strip_paren(body)
+        if not p:
+            return []
+        c = self.canonical(p)
+        if c is None and (p in self.drop_exact or any(s in p for s in self.drop_sub)):
+            return []                                    # 细节短语 → 删（先于展开/兜底）
+        if c is None:
+            exp = self.expand.get(_key(p))               # 组合名展开（一名拆多名）
+            if exp:
+                return [x + ann if i == 0 else x for i, x in enumerate(exp)]
+        if c is None:
+            c = self._wrap_hit(p)                        # 修饰兜底
+            if c is not None and mapped is not None:
+                mapped.append((p, c))
+        if c is None:                                    # 仍未登记：原样保留 + 收集
+            if unknown is not None and all(p != u for u, _ in unknown):
+                unknown.append((p, self.suggest(p)))
+            c = p
+        c = re.sub(r"\b(dfs|bfs|dp|lca|rmq)\b", lambda m: m.group(1).upper(), c)
+        return [c + ann]
+
+    def _norm_group(self, seg, unknown, mapped):
+        """解法组：按顶层 `+` / `、` 拆项 → 逐项归一 → 拼 ` + `（组内保序去重）"""
+        out = []
+        for p in split_top(seg or ""):
+            for x in self._norm_item(p, unknown, mapped):
+                if x not in out:
+                    out.append(x)
+        return " + ".join(out)
+
+    def norm_name(self, alg, unknown=None, mapped=None):
+        """自动归一（新场次用），输出 v2 格式：`；` 分解法组、组内 ` + `、`[..]` 与标注原样保留。
+
+        流程：按顶层 `；` 分解法组 → 组内按 `+`/`、`/`｜` 拆项 → 每项剥尾巴标注
+        （`(主)`、`（主）` 也认）→ 去（括号）说明 → 别名映射 → 命中删除表就删 →
+        组合名展开 → 修饰兜底 → 按原结构拼回（组间 ` ； `、组内 ` + `）。
+
+        unknown / mapped 传 list 时收集诊断（供写状态表 / 归档对账报告）：
+          · unknown += [(段, 最接近的标准名 or None)] —— 归一后仍非标准名的段
+            （落盘原样保留；调用方负责报出来，逼着收编或改写法）
+          · mapped  += [(段, 标准名)] —— 靠「修饰兜底」归一的段（未经词典收编，
+            人工核对用；`分组前缀和`→`前缀和` 这类）
+        """
+        groups = []
+        for g in split_groups(alg or ""):
+            s = self._norm_group(g, unknown, mapped)
+            if s and s not in groups:                    # 整组被删 → 跳；同串解法组去重
+                groups.append(s)
+        return (" %s " % SEMI).join(groups)
+
+    def final_knowledge(self, contest, rnd, letter, alg, unknown=None, mapped=None):
+        """定稿表优先（人工过审）；查不到 → 自动归一（诊断信息透传，见 norm_name）"""
         hit = self.final.get((contest, int(rnd), str(letter).upper())) if rnd is not None else None
-        return hit if hit else self.norm_name(alg)
+        return hit if hit else self.norm_name(alg, unknown=unknown, mapped=mapped)
 
     def fix_aliases(self, text, key="数据结构与算法"):
         """把 md 文本里 `- **<key>**：…` 那一行的**别名**换成标准名（纯函数，不写盘）。
@@ -277,23 +419,26 @@ class KnowledgeDict(object):
         m = re.search(r"^- \*\*%s\*\*：(.+)$" % re.escape(key), text, re.M)
         if not m:
             return text, []
-        parts = re.split(r"([+、/])", m.group(1))     # 奇数位 = 分隔符
+        parts = re.split(r"([+、/；;])", m.group(1))   # 奇数位 = 分隔符
         used = []
         for i in range(0, len(parts), 2):
             s = parts[i].strip()
-            if not s:
+            if not s or (s[0] in "[【" and s[-1] in "]】"):
+                continue                                 # 打包组：组内名字由归一负责
+            body, _ann = _split_annot(s)                 # `A[主]` 只换 A 部分、标注保留
+            if not body:
                 continue
-            c = self.canonical(s)
+            c = self.canonical(body)
             if c is None:
-                s2 = strip_paren(s)                  # `状态压缩DP（子集枚举）` 也认
+                s2 = strip_paren(body)                   # `状态压缩DP（子集枚举）` 也认
                 c2 = self.canonical(s2) if s2 else None
                 if c2 and c2 != s2:
                     used.append((s2, c2))
                     parts[i] = parts[i].replace(s2, c2)
                 continue
-            if c != s:
-                used.append((s, c))
-                parts[i] = parts[i].replace(s, c)
+            if c != body:
+                used.append((body, c))
+                parts[i] = parts[i].replace(body, c)
         if not used:
             return text, []
         return text.replace(m.group(0), "- **%s**：%s" % (key, "".join(parts))), used
@@ -304,17 +449,19 @@ class KnowledgeDict(object):
         resolved = 落盘用的名字（别名已映射；未登记的原样保留——落盘不猜）；
         mapped   = [(原名, 标准名)] 别名自动纠正记录；
         unknown  = [(原名, 建议 or None)] 待登记清单（不拒收）。
+        宽容：元素带 `[主]` / `[次]` 标注时剥掉再查（题解包 manifest 可能混入标注）。
         """
         resolved, mapped, unknown = [], [], []
         for raw in names:
             s = (raw or "").strip()
             if not s:
                 continue
-            c = self.canonical(s)
+            body, ann = _split_annot(s)
+            c = self.canonical(body)
             if c:
-                if c != s:
+                if c + ann != s:
                     mapped.append((s, c))
-                resolved.append(c)
+                resolved.append(c + ann)
             else:
                 unknown.append((s, self.suggest(s)))
                 resolved.append(s)
@@ -342,9 +489,18 @@ USAGE = """用法：
 def run_check(words):
     kd = load()
     for w in words:
-        c = kd.canonical(w)
+        body, _ann = _split_annot(w)          # `A[主]` 这种也查得动（剥掉标注再查）
+        c = kd.canonical(body)
         if c is None:
-            s = kd.suggest(w)
+            exp = kd.expand.get(_key(body))
+            if exp:
+                print("%s → 组合名（归一时会拆成：%s）" % (w, " + ".join(exp)))
+                continue
+            w2 = kd._wrap_hit(body)
+            if w2:
+                print("%s → 未收编（自动归一时修饰兜底会归到：%s）" % (w, w2))
+                continue
+            s = kd.suggest(body)
             print("%s → 未登记（最接近的标准名：%s；仅供参考）"
                   % (w, s if s else "无"))
         elif c == w:
@@ -365,14 +521,19 @@ def _selftest():
     kd = load()
     assert kd.standards and kd.drop_exact and kd.drop_sub and kd.final
 
-    # 不变量 1：定稿表的值用全角竖线（半角会切断 md 表格），且各段都是已登记名字
+    # 不变量 1：定稿值不带半角竖线（会切断 md 表格）、也不带全角竖线（旧格式已废止），
+    # 拆出来的每个名字都是已登记标准名（v2：`；` 分解法、` + ` 并列、`[…]` 打包、`[主]/[次]` 标注）
     for (contest, rnd, letter), val in kd.final.items():
         assert "|" not in val, "定稿值里有半角竖线（会切断 md 表格）：%s" % val
+        assert BAR not in val, "定稿值里还有全角竖线（旧格式没迁干净）：%s" % val
         assert isinstance(rnd, int) and len(letter) == 1 and letter.isupper()
-        for p in re.split(r"\s*" + BAR + r"\s*|[、]", val):
+        names = split_names(val)
+        assert names, "定稿值拆不出任何名字：%s" % val
+        for p in names:
             assert kd.canonical(p) == p, "定稿值里的「%s」不是标准名（%s）" % (p, val)
 
-    # 不变量 2：有文件夹的标准名 ↔ 文件夹互为唯一；文件夹本身无正斜杠 / 空段
+    # 不变量 2：有文件夹的标准名都指到登记的那个文件夹（文件夹可多名共用，如
+    # 「前缀和」「差分」共用 `前缀和与差分`）；文件夹本身无正斜杠 / 空段
     for name, folder in kd.standards:
         if folder:
             assert kd.folders.get(name) == folder
@@ -388,13 +549,18 @@ def _selftest():
         assert kd.canonical("状态压缩DP") == "状压 DP"
         assert kd.canonical("状态压缩 dp") == "状压 DP"
         assert kd.canonical("状压dp") == "状压 DP"
-    if kd.canonical("前缀和与差分"):
-        assert kd.canonical("差分") == "前缀和与差分"
-        assert kd.folder_of("差分") == "前缀和与差分"
+    if kd.canonical("前缀和") and kd.canonical("差分"):
+        # 2026-10-05：拆成两个标准名、共用一个归档文件夹（各写各的段，不再合并成一个名字）
+        assert kd.folder_of("差分") == kd.folder_of("前缀和") == "前缀和与差分"
         assert kd.norm_name("置换环 + 差分 + 树状数组 + 二分") \
-            == "置换环 " + BAR + " 前缀和与差分、树状数组、二分查找"
+            == "置换环 + 差分 + 树状数组 + 二分查找"
         assert kd.fix_aliases("- **数据结构与算法**：置换环 + 差分 + 树状数组 + 二分")[1] \
-            == [("差分", "前缀和与差分"), ("二分", "二分查找")]
+            == [("二分", "二分查找")]
+    if kd.expand.get(_key("前缀和与差分")):
+        # 组合名展开（一名拆多名）：在原来的位置拆开，外面照常套 `[]` 与标注
+        assert kd.norm_name("前缀和与差分") == "前缀和 + 差分"
+        assert kd.norm_name("前缀和与差分[主]") == "前缀和[主] + 差分"
+        assert kd.norm_name("[前缀和与差分][主] + 排序") == "[前缀和 + 差分][主] + 排序"
     if kd.canonical("二分查找"):
         assert kd.canonical("二分") == "二分查找"
     if kd.canonical("DFS 序"):
@@ -407,14 +573,46 @@ def _selftest():
 
     # 自动归一（纯规则，与具体词表无关）
     assert kd.norm_name("位运算（末尾零计数）+ 进制转换") == "位运算"
-    assert kd.norm_name("dfs+dp") == "DFS " + BAR + " DP"
+    assert kd.norm_name("dfs+dp") == "DFS + DP"
     assert kd.norm_name("连通块计数 + 洪水填充（BFS 迭代版）+ 四连通 / 八连通两套邻居定义") == "连通块计数"
     assert kd.norm_name("") == ""
+
+    # v2 格式（2026-10-05 用户选定）：`；` 分解法、` + ` 组内并列、`[…]` 打包、`[主]`/`[次]` 标注
+    assert kd.norm_name("位掩码[主] + 贪心") == "位运算[主] + 贪心"
+    assert kd.norm_name("位掩码（主）+ 贪心") == "位运算[主] + 贪心"      # `（主）` 转正成 `[主]`
+    assert kd.norm_name("位掩码 ； 贪心") == "位运算 ； 贪心"
+    assert kd.norm_name("位掩码; 贪心") == "位运算 ； 贪心"               # 半角分号也认
+    assert kd.norm_name("[位掩码 + 贪心][主] ； 枚举") == "[位运算 + 贪心][主] ； 枚举"
+    assert kd.norm_name("位掩码 ｜ 贪心") == "位运算 + 贪心"              # 旧竖线宽容视同 ` + `
+    assert kd.norm_name("位掩码 + 位运算") == "位运算"                    # 组内同名去重
+    assert kd.norm_name("枚举 ； 位掩码") == "枚举 ； 位运算"             # 不同解法组保留
+    assert kd.norm_name("位掩码 ； 位运算") == "位运算"                   # 同串解法组去重
+    assert split_names("[前缀和 + 差分][主] ； 枚举 ； DFS") \
+        == ["前缀和", "差分", "枚举", "DFS"]
+
+    # 修饰兜底（2026-10-05）：段以已登记名字开头/结尾（还剩修饰字）→ 归到它。
+    # 用虚构词（`…xyz`）验机制本身，词典以后收编同名不影响。
+    if kd.canonical("前缀和"):
+        assert kd.norm_name("前缀和xyz") == "前缀和"
+        assert kd.norm_name("前缀和xyz + 位运算") == "前缀和 + 位运算"
+    if kd.canonical("枚举"):
+        assert kd.norm_name("枚举xyz") == "枚举"
+    if kd.canonical("DFS"):
+        assert kd.norm_name("迭代 DFS") == "DFS"
+    # 删除表先于兜底：`DFS 枚举因子` 整段删，不会被吃成 `DFS`
+    assert kd.norm_name("DFS 枚举因子 + 位运算") == "位运算"
+    # 兜底不上的原样保留 + 进 unknown；兜底命中进 mapped
+    u, m = [], []
+    got = kd.norm_name("前缀和xyz + 未登记xyzabc", unknown=u, mapped=m)
+    assert got == "前缀和 + 未登记xyzabc", got
+    assert m == [("前缀和xyz", "前缀和")], m
+    assert len(u) == 1 and u[0][0] == "未登记xyzabc", u
+    assert kd.norm_name("未登记xyzabc") == "未登记xyzabc"
 
     # 定稿表优先：逐条拿「乱写的算法串」去查，必须原样返回定稿值
     for (contest, rnd, letter), val in kd.final.items():
         assert kd.final_knowledge(contest, rnd, letter, "乱写-" + letter) == val
-    assert kd.final_knowledge("牛客周赛", 99999, "A", "位掩码+贪心") == "位运算 " + BAR + " 贪心"
+    assert kd.final_knowledge("牛客周赛", 99999, "A", "位掩码+贪心") == "位运算 + 贪心"
 
     # 文件夹解析
     if kd.folder_of("区间dp"):
@@ -435,7 +633,7 @@ def _selftest():
         assert unknown == []
 
     print("knowledge_dict 自检 OK（%d 标准名 / %d 文件夹 / %d 别名 / %d 定稿）"
-          % (len(kd.standards), len(kd.folders), len(kd.alias), len(kd.final)))
+          % (len(kd.standards), len(kd.folder_names), len(kd.alias), len(kd.final)))
 
 
 def main(argv):

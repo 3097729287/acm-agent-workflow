@@ -14,6 +14,9 @@ r"""unify_latex.py —— 把题解正文里的 Unicode 数学统一成 LaTeX �
   4. balanced_trim 循环修剪两端（空白 / 连接符 / 悬空括号）。
   5. render：{ } 先占位 → <sub>/<sup> → √/sqrt → 符号映射 → ^/_ 括起
      → 结构后处理 → 还原 \{ \}。
+  6. 「## 目录」节的表格行整行原样保留（2026-10-05 加）：目录表是结构化数据
+     （第 3 列「考点」必须与状态表逐字一致的标准知识点串），不是散文——
+     `DP[主]` 这类「缩写 + 下标括号」不该被当数学转成 `$DP$[主]`。
 """
 import io
 import os
@@ -363,11 +366,22 @@ def convert_line(line, stats):
 def process(text, stats):
     lines = text.split("\n")
     mask = toolutil.fence_mask(lines, indent=True)   # 代码块整块原样保留
-    out, dblock = [], False
+    out, dblock, in_toc = [], False, False
     for i, ln in enumerate(lines):
         if mask[i]:
             out.append(ln)
             continue
+        # 「## 目录」表格行：结构化数据，整行原样保留（见文件头设计第 6 条）
+        s = ln.strip()
+        if s == "## 目录":
+            in_toc = True
+            out.append(ln)
+            continue
+        if in_toc:
+            if not s or s.startswith("|"):    # 空行（标题与表格之间）与表格行原样过
+                out.append(ln)
+                continue
+            in_toc = False              # 其他非空行 = 目录节结束
         # 跨行 $$...$$ 块公式：整块原样保留（公式内容不该再被转）。
         # 单行内 `$$` 出现奇数次 = 块的开始 / 结束；同行 $$...$$ 由 PROT 段保护。
         if ln.count("$$") % 2:

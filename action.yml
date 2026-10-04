@@ -1,5 +1,5 @@
 name: '题解格式闸'
-description: '对题解 Markdown 跑 17 项格式自检（LaTeX $ 配对与完整度、节白名单、目录四列、小节顺序、代码块、KaTeX 渲染…）。挂到任意仓库的 CI 上，不合格就变红。'
+description: '对题解 Markdown 跑 18 项格式自检（LaTeX $ 配对与完整度、节白名单、目录四列、小节顺序、代码块、KaTeX 渲染…）。挂到任意仓库的 CI 上，不合格就变红。'
 author: '3097729287'
 
 branding:
@@ -15,7 +15,7 @@ inputs:
     required: false
     default: ''
   python-version:
-    description: '跑闸用的 Python 版本。17 项里需要编译的那几项另外要 g++，没有会如实记「未验证」而不是报错。'
+    description: '跑闸用的 Python 版本。18 项里需要编译的那几项另外要 g++，没有会如实记「未验证」而不是报错。'
     required: false
     default: '3.13'
 
@@ -25,7 +25,7 @@ runs:
     - uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
-    - name: 跑 17 项格式闸
+    - name: 跑 18 项格式闸
       shell: bash
       env:
         GATE_ROOT: ${{ github.action_path }}

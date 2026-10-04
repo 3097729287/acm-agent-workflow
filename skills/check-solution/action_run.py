@@ -62,7 +62,7 @@ def main():
     print("[action] 待检查 %d 份：%s" % (len(files), "、".join(files)))
 
     # ::group:: 是 GitHub 的日志折叠标记；本地跑时它只是两行普通输出，无副作用。
-    print("::group::check_solution.py（17 项格式闸）")
+    print("::group::check_solution.py（18 项格式闸）")
     cmd = [sys.executable, os.path.join(root, GATE), "--repo", root] + files + extra
     try:
         rc = subprocess.call(cmd)

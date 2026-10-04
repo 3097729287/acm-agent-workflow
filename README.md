@@ -2,7 +2,7 @@
 
 **算法竞赛的「题解 + 补题」流水线——从抓题面到归档，全程交给 AI agent，每一步都有机器闸门。**
 
-不是「请 agent 认真一点」，而是**跑一条命令、看退出码**：验证数字逐字来自实跑，题解格式 17 项逐条查，归档对账退出码 0 才算完。你只负责 review。
+不是「请 agent 认真一点」，而是**跑一条命令、看退出码**：验证数字逐字来自实跑，题解格式 18 项逐条查，归档对账退出码 0 才算完。你只负责 review。
 
 [![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [English](README.en.md) ｜ [在线文档](https://3097729287.github.io/acm-agent-workflow/) ｜ [MIT](LICENSE) ｜ **v0.1.0 早期演示版**，欢迎来 [Issues](https://github.com/3097729287/acm-agent-workflow/issues) 提意见
 
@@ -57,7 +57,7 @@ python install.py      # 只要 Python 3.9+，零第三方库；g++ / node 可�
 
 （换成洛谷整场的 URL 一样认。）它会自己走完六步：
 
-**抓题面 → 定档 → 写代码 + 验证驱动 → 四档验证 → 写题解 + 17 项自检 → 复验 + 归档对账**
+**抓题面 → 定档 → 写代码 + 验证驱动 → 四档验证 → 写题解 + 18 项自检 → 复验 + 归档对账**
 
 你要看的只有两样：**它报的实测数字**（必须逐字来自实跑）和**退出码 0**。
 
@@ -106,7 +106,7 @@ git clone https://github.com/3097729287/acm-agent-workflow
 cp -r acm-agent-workflow/skills/check-solution ~/.claude/skills/
 ```
 
-装完说「对 我的题解.md 跑一遍题解质检」：17 项格式闸，每条问题带行号 + 原句。见 [skills/check-solution/README.md](skills/check-solution/README.md)。
+装完说「对 我的题解.md 跑一遍题解质检」：18 项格式闸，每条问题带行号 + 原句（第 18 项＝目录表「考点」列必须是**知识点 v2 规范串**（与状态表「知识点」列同一套口径，口径出处 = `knowledge/15-知识点词典.md` 第五节））。见 [skills/check-solution/README.md](skills/check-solution/README.md)。
 
 **改代码**：先跑对应自检（多数有 `--help`）：`status_gui.py --selftest`、`selfcheck_filter.py`、`selfcheck_import.py`、`check_contributions.py`、`knowledge_dict.py selftest`、`fetch_problem.py --selftest`。注意 `verify_<字母>.py` 验证驱动**没有 `--help`**——直接跑就是执行验证。
 
@@ -115,7 +115,7 @@ cp -r acm-agent-workflow/skills/check-solution ~/.claude/skills/
 | 闸门 | 命令 | 通过 = |
 |---|---|---|
 | 验证闸 | `verify_<字母>.py` | 四档（样例 / 边界 / 对拍 / 极限）逐档给出**实测数字** |
-| 格式闸 | `check_solution.py <md>` | 17 项全过，每项附行号原句 |
+| 格式闸 | `check_solution.py <md>` | 18 项全过，每项附行号原句 |
 | 归档闸 | `archive_check.py RoundNNN` | **退出码 0** = 算法库 / 索引 / 知识库四处对账一致 |
 | 安装闸 | `python install.py --check` | 拿自带示例把所有闸门跑一遍（只体检，不写任何文件） |
 
@@ -157,10 +157,10 @@ python demo/题解/牛客周赛/Round163/B-G/B/verify_b.py
 | ② 定档 | 查《已讲过概念清单》+ 分档表 | 每题讲什么、讲多深 | — |
 | ③ 写代码 | 每题一个目录 `RoundN\<区间>\<字母>\` | `x.cpp` + `x_brute.cpp` + `verify_x.py` | — |
 | ④ 验证 | `python verify_x.py` | 四档实测数字 | 全过且数字来自实跑 |
-| ⑤ 写题解 + 自检 | `python tools/check_solution.py <md>` | `RoundN题解.md` | 17 项全过 |
+| ⑤ 写题解 + 自检 | `python tools/check_solution.py <md>` | `RoundN题解.md` | 18 项全过 |
 | ⑥ 复验 + 归档 | `python tools/md_full.py <md> <字母>` → `archive_check.py RoundN` | 算法库记录 / 索引 / 状态表 | **退出码 0** |
 
-<img src="docs/demo-gates.gif" width="900" alt="check_solution.py 实跑：17 项逐条通过、结论 0 项有问题">
+<img src="docs/demo-gates.gif" width="900" alt="check_solution.py 实跑：逐条通过、结论 0 项有问题">
 
 一场一个自包含文件夹：
 
@@ -202,7 +202,7 @@ python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串
 | `new_round.py` | 新场次起手骨架（目录 + md 空壳，幂等不覆盖） |
 | `verify.py` | 四档验证驱动：编译 → 样例 → 边界 → 对拍 → 极限 |
 | `md_full.py` | 交付前复验：抽 **md 里贴着的那份代码** 四档全跑 |
-| `check_solution.py` | 题解 md 的 17 项格式闸门（每项带行号原句） |
+| `check_solution.py` | 题解 md 的 18 项格式闸门（每项带行号原句；第 18 项＝目录表「考点」列必须是**知识点 v2 规范串**（与状态表「知识点」列同一套口径，口径出处 = `knowledge/15-知识点词典.md` 第五节）） |
 | `archive_check.py` | 归档对账，**退出码 0 = 归档完成** |
 | `index_sync.py` | 索引两表自动生成（记录 md 是单一事实来源） |
 | `status_report.py` / `status_gui.py` / `fill_knowledge.py` | 状态表三件套（报告 + 筛选 / 图形端 / 知识点列） |
@@ -211,7 +211,7 @@ python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串
 | `knowledge_dict.py` | 知识点词典的解析与查询（标准名 / 别名 / 未登记建议） |
 | `selfcheck_import.py` | 导入导出的机器闸门（往返无损 + 未登记照收） |
 | `check_contributions.py` | 投稿包校验：`contributions\` 里每个包在临时空数据根里 `import --dry` 一遍（CI 跑） |
-| `skills/check-solution` | 题解质检 skill：把 17 项格式闸包成「clone 下来就能用」 |
+| `skills/check-solution` | 题解质检 skill：把 18 项格式闸包成「clone 下来就能用」 |
 | `vizgrid.py` | 终端字符画引擎（讲数据结构配「可跑的图」） |
 | `unify_latex.py` / `unpair_ticks.py` / `unpair_ticks_relaxed.py` / `extract_math.py` + `katex_check.js` | LaTeX 工具（转换 / 去灰底 / KaTeX 真渲染） |
 | `check_lost_by_hash.py` | 搬目录后的内容哈希对账（按文件名比对会骗人） |
@@ -249,7 +249,7 @@ python tools/import_solution.py 牛客周赛Round163.zip --apply  # 落盘 + 串
 
 ## 平台与 CI
 
-核心流程三平台 CI 全绿（Ubuntu / macOS / Windows × Python 3.9 / 3.13）：环境体检、示例闸门、索引同步、词典自检、抓取解析自检跑满六格；四档复验、17 项格式闸（含 KaTeX 渲染）、反例必须被拦、Action 入口三条退出码跑 Linux + 3.13 一格；题解包导入导出与投稿校验跑 Linux / Windows + 3.13。
+核心流程三平台 CI 全绿（Ubuntu / macOS / Windows × Python 3.9 / 3.13）：环境体检、示例闸门、索引同步、词典自检、抓取解析自检跑满六格；四档复验、18 项格式闸（含 KaTeX 渲染）、反例必须被拦、Action 入口三条退出码跑 Linux + 3.13 一格；题解包导入导出与投稿校验跑 Linux / Windows + 3.13。
 
 `status_gui.py` 图形端与部分 `.cmd` 是 Windows 向；图形端在 Linux 上若提示缺 tkinter，装 `python3-tk` 即可。路径都走 config，指过去就行。
 

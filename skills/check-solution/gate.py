@@ -9,7 +9,7 @@
 
     python gate.py <题解.md> [更多.md ...] [--no-compile] [--no-record] [--quiet]
     python gate.py --repo <仓库根> <题解.md> ...
-    python gate.py --list          # 只打印 17 项检查清单就退出
+    python gate.py --list          # 只打印 18 项检查清单就退出
     python gate.py --help
 
 仓库根按下面的顺序找，第一个命中就用（想确认找没找对，看第一行提示）：

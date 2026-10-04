@@ -14,20 +14,23 @@
 退出码：
   0  正常（dry / apply 都可能是 0）；
   2  状态表里认不出表头（旧版 / 新版 7 列表头都没有）；
-  3  有「查不到知识点」的题（含场次认不出、被跳过的行）—— **dry 与 apply 一样**；
-     apply 仍照常写文件，只是退出码变大，方便上层（GUI / 批处理）察觉。
+  3  有「查不到知识点」的题（含场次认不出、被跳过的行），**或归一后仍有未登记知识点
+     （2026-10-05 起：强制标准命名，未登记段报出来，逼着收编或改写法）**——
+     dry 与 apply 一样；apply 仍照常写文件，只是退出码变大，方便上层察觉。
 
-知识点写法（用户 2026-10-02 定稿）：
-    `主知识点 ｜ 次1、次2`   —— 分隔符是全角竖线 U+FF5C（半角 | 会把 md 表格切断）
-    · 按**顶层** `+` 拆分（写在括号里的 `+` 不算，如「构造（上界 + 达到上界）」只有一段）
-    · 每段去掉括号说明（括号 = 赘述，用户要求删）
-    · 第一段 = 主；其余去重后 = 次要，用「、」连接；没有次要就不带竖线
+知识点写法（用户 2026-10-05 定稿，v2；写法规则唯一出处 = 词典「五、写法规则」）：
+    `解法1[主] + 泛用知识点 ； 解法2 ； 解法3`
+    · `；` = 解法分隔（正解排最前，其余是另解）；组内 ` + ` = 同一解法里并列使用的知识点
+    · `[…]` 打包一组同时出现的小知识点（可嵌套）；`[主]` / `[次]` 标主次（可省略）
+    · 旧格式 `主 ｜ 次1、次2`（全角竖线 U+FF5C）2026-10-05 起废止
 
-归一（2026-10-03 定稿）：规则与词表的唯一出处 = `knowledge/15-知识点词典.md`，
+归一：规则与词表的唯一出处 = `knowledge/15-知识点词典.md`，
 解析器 = 同目录 `knowledge_dict.py`（本文件不再藏任何名字表）：
-    · 标准名 = 算法库文件夹名（含 DP 子文件夹）；同义合并（二分 → 二分查找）
-    · 细节短语一律删（只留在单题题解里）；多解法题主解法并列写竖线左边
-    · 已定稿题目查词典第三节（人工过审）；新场次走自动归一
+    · 标准名 = 词典「一、标准名表」（多数就是算法库文件夹名，含 DP 子文件夹）；
+      同义合并（二分 → 二分查找）
+    · 细节短语一律删（只留在单题题解里）；**两个不同的解法之间只能写 `；`，不许拿空格并排**
+    · 已定稿题目查词典「四、已定稿题目」（人工过审）；新场次走自动归一
+      （含组合名展开与修饰兜底）
 
 只改表头行 + 数据行里对应单元格，其余行逐字节不动；apply 前自动备份；纯 LF 无 BOM。
 """
@@ -93,11 +96,15 @@ def split_cells(line):
 
 # ---------------------------------------------------------------- 读索引
 def read_index(path):
-    """{(比赛名, 场次号, 字母): 知识点}（场次键走 toolutil.parse_contest，不写死牛客）
+    """{(比赛名, 场次号, 字母): 知识点} + 诊断清单（场次键走 toolutil.parse_contest，不写死牛客）
 
-    知识点 = 索引「算法 / 数据结构」列经词典归一（定稿表优先 → 自动归一）。"""
+    知识点 = 索引「算法 / 数据结构」列经词典归一（定稿表优先 → 自动归一）。
+    返回 (out, unknown, mapped)：
+      unknown = [(题键, 段, 建议)]   归一后仍非标准名的段（会被报出来，强制收编/改写法）
+      mapped  = [(题键, 段, 标准名)] 修饰兜底命中的段（未经收编，供人工核对）"""
     kd = knowledge_dict.load()
     out = {}
+    unknown, mapped = [], []
     name, rnd = None, None
     for line in io.open(path, encoding="utf-8").read().split("\n"):
         m = re.match(r"^##(?!#)\s+(.*)$", line)
@@ -109,13 +116,18 @@ def read_index(path):
         c = split_cells(line)
         if not c or len(c) != 5 or not re.fullmatch(r"[A-Z]", c[0]):
             continue
-        out[(name, rnd, c[0])] = kd.final_knowledge(name, rnd, c[0], c[3])
-    return out
+        u, mp = [], []
+        out[(name, rnd, c[0])] = kd.final_knowledge(name, rnd, c[0], c[3],
+                                                    unknown=u, mapped=mp)
+        key = "%s R%d%s" % (name, rnd, c[0])
+        unknown += [(key, x, s) for x, s in u]
+        mapped += [(key, x, s) for x, s in mp]
+    return out, unknown, mapped
 
 
 # ---------------------------------------------------------------- 改状态表
 def run(mode, fpath, ipath):
-    idx = read_index(ipath)
+    idx, unknown, mapped = read_index(ipath)
     text = io.open(fpath, encoding="utf-8").read()
     lines = text.split("\n")
     i0 = next((i for i, l in enumerate(lines) if split_cells(l) == HEAD_OLD
@@ -160,11 +172,21 @@ def run(mode, fpath, ipath):
         print("索引里有、状态表里没有的：%s" % PUNCT.join("%s R%d%s" % k for k in extra))
     for ln, txt in unparsed:
         print("★ 状态表第 %d 行场次认不出，跳过不填（绝不当牛客处理）：%s" % (ln, txt))
-    bad = bool(miss or unparsed)
+    if mapped:
+        print("修饰兜底自动映射（未经收编，核对一下）：%s"
+              % "；".join("%s「%s」→「%s」" % t for t in mapped))
+    for key, x, s in unknown:
+        print("★ 未登记知识点：%s「%s」%s（归一后仍非标准名——收编进词典或改写法）"
+              % (key, x, ("（最接近：%s）" % s) if s else ""))
+    bad = bool(miss or unparsed or unknown)
     if bad:
         items = list(miss) + ["第 %d 行「%s」" % (ln, txt) for ln, txt in unparsed]
-        print("★ 索引里查不到知识点（%d 个）：%s（先补索引或修表，别留空）"
-              % (len(items), PUNCT.join(items)))
+        if items:
+            print("★ 索引里查不到知识点（%d 个）：%s（先补索引或修表，别留空）"
+                  % (len(items), PUNCT.join(items)))
+        if unknown:
+            print("★ 有未登记知识点（%d 个）——知识点强制走标准名，见词典写法规则"
+                  % len(unknown))
     if mode != "apply":
         print("—— dry run，没写文件（要写加 apply）——")
         return 3 if bad else 0

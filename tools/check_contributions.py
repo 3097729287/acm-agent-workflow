@@ -2,7 +2,7 @@
 r"""check_contributions —— `contributions\` 里每个题解包的机器闸门（设计 §5.2）
 
     python tools\check_contributions.py                 # 自检（好包绿 / 坏包红）+ 扫 contributions\
-    python tools\check_contributions.py --fast          # 跳过 md 的 17 项闸门（只验管道，本机快跑）
+    python tools\check_contributions.py --fast          # 跳过 md 的 18 项闸门（只验管道，本机快跑）
     python tools\check_contributions.py --no-selftest   # 只扫 contributions\（CI 主路径就是这条）
     python tools\check_contributions.py --pack <路径>   # 只查一个包（收到 issue 附件时本地跑）
 
@@ -145,7 +145,7 @@ def selftest(base, mem, fast):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="contributions\\ 里题解包的机器闸门")
     ap.add_argument("--pack", help="只查这一个包（zip / 目录），不扫 contributions\\、不跑自检")
-    ap.add_argument("--fast", action="store_true", help="跳过题解 md 的 17 项闸门（只验管道）")
+    ap.add_argument("--fast", action="store_true", help="跳过题解 md 的 18 项闸门（只验管道）")
     ap.add_argument("--no-selftest", action="store_true", help="跳过好包 / 坏包自检")
     ap.add_argument("--keep", action="store_true", help="留着临时目录（排查用）")
     a = ap.parse_args(argv)

@@ -22,7 +22,7 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed --name TimuZhuang
 
 产物 = `<distpath>/TimuZhuangtai.exe`（单文件，体积十 MB 量级，会随 PyInstaller / Python 版本浮动）。三个路径参数指到**仓库外**，是为了不把构建垃圾（`build\` / `.spec` / `.exe`）留在仓库里。下面两处必须照抄：
 
-- **`--hidden-import` 那一串**：exe 里没有 Python 解释器，`tools\` 下的兄弟脚本（导入 / 导出 / 索引同步 / 状态表知识点刷新 / 归档对账 / 17 项格式闸）全靠 `toolutil.run_sibling` 进程内 import 调用——不写进清单就会「运行时找不到模块」；
+- **`--hidden-import` 那一串**：exe 里没有 Python 解释器，`tools\` 下的兄弟脚本（导入 / 导出 / 索引同步 / 状态表知识点刷新 / 归档对账 / 18 项格式闸）全靠 `toolutil.run_sibling` 进程内 import 调用——不写进清单就会「运行时找不到模块」；
 - **`--add-data tools/katex_check.js;.`**：第 17 项 KaTeX 渲染检查要用它，放 exe 解包目录根（与 `check_solution.py` 找它的口径一致）；Windows 上分隔符是 `;`。
 
 ## 摆放与配置查找
