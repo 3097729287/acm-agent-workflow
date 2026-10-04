@@ -489,7 +489,9 @@ def check_ptr_files(rep, root, rows, want_ptr):
             if f is None:
                 continue                      # 反查表里别的场次的标记，不归本场管
             for folder in sorted(folders):
-                if (letter, norm_name(f["name"]), folder) not in ptr_dirs:
+                # 指针文件里的 self_dir 取的是文件夹 basename（`DP\树形DP\` → `树形DP`），
+                # 比对键也 basename 化；否则双层文件夹（DP\树形DP）的「（指针）」标记永远对不上
+                if (letter, norm_name(f["name"]), folder.split(BS)[-1]) not in ptr_dirs:
                     miss.append("%s %s → `%s%s` 的题解指针.md 里没有这一行"
                                 % (letter, f["name"], folder, BS))
         if miss:
