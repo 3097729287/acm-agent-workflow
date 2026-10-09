@@ -1,4 +1,4 @@
-name: ci
+name: TB checks
 
 on:
   push:
@@ -9,91 +9,82 @@ permissions:
   contents: read
 
 jobs:
-  gate:
-    name: ${{ matrix.os }} · Python ${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.9", "3.13"]
+  backend:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      TB_OFFLINE: '1'
+      PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
-
-      - name: 装 g++（Linux 需要；macOS 自带 clang 的 g++ 别名）
-        if: runner.os == 'Linux'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq g++
-
-      # 不带编译器的机器也跑：没装 g++ 时验证档会如实降级「未验证」，退出码仍应为 0
-      - name: 环境体检 + 示例闸门（archive_check Round163 / Round161，退出码 0 = 通过）
-        run: python install.py --check
-
-      - name: 索引同步 dry（两处无 diff 才算过）
-        run: python tools/index_sync.py dry
-
-      - name: 知识点词典自检（名字规范的唯一出处，数据坏了这里先红）
-        run: python tools/knowledge_dict.py selftest
-
-      # 离线（不联网）：拿 examples/luogu/ 里的原始返回重跑洛谷解析链，
-      # 与落盘的题面 / samples.py / 题单.md 逐字比对
-      - name: 洛谷抓取解析自检（fixture 原始返回 → 产物逐字）
-        run: python tools/fetch_problem.py --selftest
-
-      # 下面两步要编译器/Node，只在 Linux + 单版本上跑，避免矩阵重复
-      - name: 交付前复验：md 里的代码四档全跑（GCC）
-        if: runner.os == 'Linux' && matrix.python == '3.13'
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: msys2/setup-msys2@v2
+        id: compiler
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-gcc
+      - name: Expose the Windows compiler to Python
+        env:
+          MSYS2_LOCATION: ${{ steps.compiler.outputs.msys2-location }}
         run: |
-          python tools/md_full.py "demo/题解/牛客周赛/Round163/Round163题解.md" B --force
-          python tools/md_full.py "demo/题解/牛客周赛/Round161/Round161题解.md" C --force
-          python tools/md_full.py "demo/题解/牛客周赛/Round161/Round161题解.md" D --force
-          python tools/md_full.py "demo/题解/牛客周赛/Round161/Round161题解.md" E --force
+          Join-Path $env:MSYS2_LOCATION 'ucrt64/bin' | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Verify C++ dependency
+        run: g++ --version
+      - name: Desktop and regression dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: SQLite, API, migration, translation and judge regressions
+        run: python scripts/check.py
+      - name: Native WebView compiler and form fixtures
+        run: python desktop/tests/official_native.py
 
-      - name: 题解格式闸门 18 项（含 KaTeX 渲染）
-        if: runner.os == 'Linux' && matrix.python == '3.13'
-        run: |
-          cd tools
-          npm install --no-save --no-audit --no-fund katex > /dev/null
-          cd ..
-          python tools/check_solution.py "demo/题解/牛客周赛/Round163/Round163题解.md"
-          python tools/check_solution.py "demo/题解/牛客周赛/Round161/Round161题解.md"
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      TB_OFFLINE: '1'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:model
+      - run: npm run test:math
+      - run: npm run test:compilers
+      - run: npm run test:ui
+      - run: npm run test:workbench
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tb-ui-screenshots
+          path: frontend/tests/screenshots/
+          if-no-files-found: ignore
 
-      # Linux 这格同时验「包内相对路径一律反斜杠」在 POSIX 分隔符下的落盘（to_os 分支）
-      - name: 题解包导入 / 导出闸门（往返无损 + 未登记名字照收）
-        if: matrix.python == '3.13' && (runner.os == 'Linux' || runner.os == 'Windows')
-        run: python tools/selfcheck_import.py
-
-      # contributions\ 是 PR 的投递箱：每个包都跑一遍 import --dry，不过关的包在这里就红。
-      # 先自检闸门自己（好包绿 / 坏包红），再扫 contributions\（空目录 = 没包要扫，正常）。
-      - name: contributions 里的题解包过校验（好包绿 / 坏包红 + 扫 contributions）
-        if: matrix.python == '3.13' && (runner.os == 'Linux' || runner.os == 'Windows')
-        run: python tools/check_contributions.py
-
-      - name: 反例必须被拦（断言格式闸退出码非 0）
-        if: runner.os == 'Linux' && matrix.python == '3.13'
-        run: |
-          if python tools/check_solution.py "examples/反例题解.md" > /dev/null 2>&1; then
-            echo "反例竟通过了格式闸 —— 闸门失效"; exit 1
-          else
-            echo "反例被拦下 —— 符合预期"
-          fi
-
-      # Action 入口（action_run.py）自己也要有闸门：好包 0 / 坏包 1 / 没给 path 2
-      - name: Action 入口自检（action_run.py 的三条退出码路径）
-        if: runner.os == 'Linux' && matrix.python == '3.13'
-        run: |
-          set +e
-          GATE_ROOT="$PWD" GATE_PATHS="demo/题解/**/*题解.md" python skills/check-solution/action_run.py > /dev/null 2>&1
-          rc_good=$?
-          GATE_ROOT="$PWD" GATE_PATHS="examples/反例题解.md" python skills/check-solution/action_run.py > /dev/null 2>&1
-          rc_bad=$?
-          GATE_ROOT="$PWD" GATE_PATHS="" python skills/check-solution/action_run.py > /dev/null 2>&1
-          rc_nopath=$?
-          echo "好包=$rc_good（期望 0）｜坏包=$rc_bad（期望 1）｜没给 path=$rc_nopath（期望 2）"
-          if [ "$rc_good" != 0 ] || [ "$rc_bad" != 1 ] || [ "$rc_nopath" != 2 ]; then
-            echo "Action 入口退出码不对 —— 闸门失效"; exit 1
-          fi
+  leaderboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Worker protocol and ranking rules
+        working-directory: server/leaderboard
+        run: npm test

@@ -1,0 +1,47 @@
+/* Shared spatial hierarchy, with the same contrast in light and dark themes. */
+.knowledge-tree-tools { gap: 8px; padding: 8px 2px 10px; }
+.knowledge-tree-tools button { font-size: .8rem; }
+.knowledge-tree { padding: 2px 3px 12px; }
+.tree-line { margin: 2px 0; border-radius: 7px; }
+.tree-line .tree-item { min-height: 36px; padding: 7px 5px 7px calc(8px + var(--depth) * 17px); gap: 7px; }
+.tree-line[data-depth="0"] { margin-top: 11px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line)); }
+.tree-line[data-depth="0"] .tree-name { font-weight: 650; color: var(--text); }
+.tree-line[data-depth="0"] .tree-item { min-height: 40px; }
+.tree-line[data-depth="1"][data-branch="true"] .tree-name { color: var(--text); font-weight: 550; }
+.tree-line[data-depth="2"], .tree-line[data-depth="3"] { border-left: 1px solid var(--line); margin-left: 21px; }
+.tree-line[data-depth="2"] .tree-item, .tree-line[data-depth="3"] .tree-item { padding-left: calc(8px + (var(--depth) - 1) * 17px); }
+.tree-name { line-height: 1.45; }
+.tree-count { font-variant-numeric: tabular-nums; font-size: .76rem; }
+.tree-count > span:first-child { padding: 1px 6px; border-radius: 5px; background: var(--panel-2); }
+.tree-personal-count { font-size: .72rem; }
+.tree-personal-count em { font-style: normal; }
+.leaf-dot { width: 4px; height: 4px; opacity: .6; }
+.tree-line.active { outline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.progress-growth-columns { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
+.progress-growth-left .progress-section { margin: 0; }
+.progress-recommendations { height: fit-content; }
+.recommendation-more { margin-top: 8px; justify-content: center; width: 100%; border-top: 1px solid var(--line); padding-top: 12px; }
+.recommendation-more[aria-expanded="true"] svg { transform: rotate(-90deg); }
+.daily-task-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 15px; }
+.daily-task-grid .daily-task { border: 1px solid var(--line); background: var(--panel-2); border-radius: 9px; padding: 15px; flex-direction: column; align-items: stretch; gap: 12px; }
+.daily-task-grid .daily-task-main { width: 100%; }
+.daily-task-grid .daily-task-main p { min-height: 2.8em; margin-bottom: 10px; }
+.daily-task-grid .daily-task > button { align-self: flex-end; }
+.daily-task-grid .daily-task-claimed { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+.wb-run-toolbar { gap: 8px; flex-wrap: wrap; }
+.wb-run-actions { margin-left: auto; gap: 7px; }
+.wb-run-actions .wb-official-submit { border-color: color-mix(in srgb, var(--accent) 25%, var(--line)); color: var(--accent); }
+.reader-lecture-references h3 { font-size: 1rem; }
+.ranking-empty { min-height: 160px; }
+.ranking-empty h3 { margin: 0; }
+.progress-section { border-radius: 11px; }
+@media (max-width: 1200px) {
+  .daily-task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wb-run-toolbar .wb-scope { display: none; }
+}
+@media (max-width: 850px) {
+  .progress-growth-columns { grid-template-columns: 1fr; }
+  .daily-task-grid { grid-template-columns: 1fr; }
+  .daily-task-grid .daily-task-main p { min-height: 0; }
+  .wb-run-actions { width: 100%; justify-content: flex-end; }
+}
