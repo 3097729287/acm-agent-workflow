@@ -42,7 +42,7 @@ class LibraryTests(unittest.TestCase):
             self.assertIn('e2', server.store.solution(row['id'])['markdown'])
             self.assertEqual(len(server.lectures.for_problem(row['id'])), 1)
             self.assertEqual(server.training.workspace()['summary']['total'], 0)
-            self.assertEqual(server.store.library.path.parent, self.root)
+            self.assertTrue(server.store.library.path.parent.samefile(self.root))
             self.assertEqual(server.store.library.check()['solutions'], 607)
             self.assertIsNone(server.dist_dir, 'API starts independently of frontend assets')
         finally:
