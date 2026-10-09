@@ -12,5 +12,6 @@
 *.yaml text eol=lf
 
 # Preserve upstream license whitespace.
-tools/tb_web/licenses/** -whitespace
-tools/tb_web/THIRDPARTY.md -whitespace
+licenses/** -whitespace
+THIRDPARTY.md -whitespace
+data/*.sqlite3 -text -diff

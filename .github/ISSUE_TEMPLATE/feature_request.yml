@@ -1,35 +1,24 @@
-name: 提建议（Feature request）
-description: 想要的能力 / 觉得流程里哪一环别扭
-title: "[建议] "
-labels: ["enhancement"]
+name: TB 功能建议
+description: 提出更适合训练的功能或界面改进
+title: "[TB 建议] "
+labels: [enhancement]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        这套东西的取舍原则是「机器闸门 > 嘱咐」：凡是能变成退出码的，就不靠人记。
-        提建议时如果能说清「它该以什么形式被检查/验证」，落地会快很多。
-        This project prefers machine gates over reminders — if your idea can be checked by an exit code, say how.
-
   - type: textarea
-    id: pain
+    id: context
     attributes:
-      label: 现在哪一步别扭 / The pain point
-      description: 你正在做什么、卡在哪、现在怎么绕过去的。
+      label: 使用场景与当前问题
+      description: 描述你正在做的训练和遇到的不便。
     validations:
       required: true
-
   - type: textarea
     id: idea
     attributes:
-      label: 你希望它变成什么样 / What you'd like
-      description: 越具体越好：一条命令？一个新脚本？某份文档加一节？
+      label: 希望怎样改进
     validations:
       required: true
-
   - type: textarea
-    id: check
+    id: result
     attributes:
-      label: 怎么算做完了 / How we'd know it works
-      description: 可选。比如「新增 N 项检查、样例数据跑出退出码 0 / 非 0」。
+      label: 怎样判断改进有效
     validations:
       required: false

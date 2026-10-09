@@ -1,97 +1,14 @@
-# AGENT 工作规则（题解 + 归档流水线）
+# TB development rules
 
-> 这份文件是给 **AI agent** 读的规则主干。用法：让 agent 读本文件开始工作
-> （放进项目当 `AGENTS.md`，或直接在会话里说「读本仓库根目录的 AGENTS.md，然后处理这个比赛 URL」）。
-> 每条规则一句正文 + 一个指针；**明细全在 `knowledge\`，冲突时以 `knowledge\` 为准**。
-> 工具用法见 `tools\`（参考页 `knowledge\10-工具链.md`）；数据放哪、怎么配见 README。
+TB is the primary product. Active code belongs in `frontend/`, `backend/`, `desktop/`, and `server/leaderboard/`. The former agent workflow and obsolete UI are preserved in `legacy/`; they are outside the application build and CI.
 
-## 铁律
-
-**1. 比赛题解走固定六步，每步一条命令。**
-触发语：**单独发来一场牛客周赛的比赛 URL**（如 `https://ac.nowcoder.com/acm/contest/126120`）；
-洛谷比赛 URL（`/contest/<id>`）同理 —— `fetch_problem.py` 认站（见《洛谷抓取》）。
-**默认写该场全部题目，不反问参数**，直接照《工作流》的六步开工：
-① `fetch_problem.py` 抓题面 → ② 看它给的分档建议 + 查《已讲过概念清单》定档 →
-③ 在 `RoundN\<区间>\<字母>\` 写 cpp → ④ `verify.py` 验证 → ⑤ `check_solution.py` 自检（交付前必跑）→
-⑥ `md_full.py` 复验（抽 md 里的代码 × 四档全跑）→ 归档。
-一场一个自包含文件夹；节模板有白名单；**持久信息（流程改动、工具新行为、坑）一律进 `knowledge\`，
-不留在题解区**。明细见《工作流》。
-
-**2. 讲算法从零开始。**
-触发：算法讲解、教学。题目问什么 → 直觉 → 最后代码；配能手算的小例子；
-代码逐行中文注释；指出错误逐条说明「为什么错」，先肯定对的部分。明细见《从零讲》。
-
-**3. C++ 交付必须本地验证。**
-编译 → 样例 → 同语言不同实现范式的随机对拍 → **如实说明验证到哪一步**（没跑的档写「未验证」）。
-实测记录 ≤6 行纯文字，数字逐字来自实跑，**不许凭记忆生成**。明细见《验证协议》。
-
-**4. 交付的题解 md：数学一律写 LaTeX。**
-变量 `$x$`、比较 `$\le$`、幂 `$10^{18}$`、复杂度 `$O(n\log n)$`、下标 `$a_i$`；
-**公式不加反引号灰底、只有真代码才加**。交付前 `check_solution.py` 把格式一次查完。明细见《数学 LaTeX》。
-
-**5. 讲数据结构 / 算法过程必须配图；图的默认形态是「可跑的终端字符画脚本」而不是 PNG。**
-终端字符高瘦（约 1 宽 × 2 高）、画线要逐格步进、网格里的空行是图的一部分、
-配一个 `run.cmd` 双击可跑；嵌进 md 的片段必须逐字来自实跑输出。引擎 = `tools\vizgrid.py`。明细见《配图》。
-
-**6. 第一次出现的新概念要单独开一整节从零讲；已经讲过的概念只给指针、不再展开。**
-是什么 → 有什么用（配能手算的最小例子）→ 在这题里怎么用（走样例）→ 为什么。
-「讲没讲过」查《已讲过概念清单》（跨场次台账），讲完当场登记。明细见《从零讲》《已讲过概念清单》。
-
-**7. 归档 = 四处一起更新。**
-非签到题 → 算法库记录 md + 全量索引 + 《归档》精简索引与对照表 + 《已讲过概念清单》；
-顺手把本场非签到题行追加到 `题解\题目状态.md`。
-收工跑 `python tools\archive_check.py RoundNNN` 对账，**退出码 0 = 归档完成**（定稿后直接做、不用问）。
-明细见《归档》。
-
-**8. 改任何文件前先备份；备份是「换地方存」，不是不存。**
-统一进 `backup_root`（默认仓库下 `.backups\`）：命名 `<原文件名>.<YYYYMMDD-HHMMSS>.bak` +
-来源目录镜像子目录；**原目录不留 `.bak` / `.orig`**。程序自带的备份不在此列。实现 = `toolutil.backup_to_repo()`。
-
-**9. 实测记录不许「生成」。**
-不要凭记忆写验证结论——「文末写 N 组对拍全部一致、现场复跑第一组就失败」是真实发生过的事故
-（原样留证见《反面教材》）。四个机制堵口：样例别手敲（机械生成）、组数别手写（脚本分开统计实际/设计）、
-验 md 里那一份（`--from-md`）、模糊词自动查（自检第 6 项）。明细见《工作流》。
-
-**10. 归档 / 搬动文件之后，按内容哈希对账，不只按文件名。**
-`python tools\check_lost_by_hash.py <快照> <现状> --scan <根>`；按文件名比对会骗人（同名文件互相顶掉）。
-源码（`.cpp` / `.py` / `.cmd` / `.md`）只有用户点名才删；「清垃圾」清的是能重生成的
-（`.exe` / `.png` / `_work\` / `__pycache__`）。
-
-**11. 知识点的名字只有一个出处：`knowledge\15-知识点词典.md`；词典里查不到的名字「照收 + 登记」，不拒收。**
-标准名用于落盘与索引；别名（同一个东西的另一种写法，如 `状态压缩DP` ≡ `状压 DP`）自动换成标准名；
-**查不到的名字原样落盘**（不猜、不改名），同时进「待登记清单」等收编。查词：`knowledge_dict.py check <名字>`。
-题解包（`export_solution.py` / `import_solution.py`）是这套名字规范的落地场景：**打回只有硬伤**，
-名字没对齐不打回。明细见《知识点词典》《工具链》。
-
-## 知识库怎么读（先读哪个）
-
-| 你要干什么 | 先读 |
-|---|---|
-| 写一场比赛的题解（主干流程） | **《工作流》**（落盘结构 / 分档 / 验证档位的唯一定义处） |
-| 讲算法 / 教学 | 《从零讲》《学习偏好》 |
-| 验证代码 | 《验证协议》《环境准备》 |
-| 写交付 md（格式） | 《题解写法》《数学 LaTeX》 |
-| 配图 | 《配图》 |
-| 归档 / 更新索引 | 《归档》《已讲过概念清单》 |
-| 知识点怎么命名 / 收别人的题解 | 《知识点词典》《工具链》 |
-| 用脚本 | 《工具链》 |
-| 抓题面 | 《牛客抓取》《洛谷抓取》 |
-| 踩过的算法实现坑 | 《算法坑集》 |
-| 反面教材 | 《反面教材》 |
-
-## 数据根与配置
-
-所有数据（题解 / 算法 / 索引 / 状态表）放一个**数据根**下，位置在 `config.json` 的 `data_root`
-（默认仓库下 `demo\`，自带两场示例：Round 163 全场 + Round 161 的 C~E 迷你场）。结构见《工作流》「落盘结构」。**脚本不写死路径**，
-换机器 / 换目录只改 `config.json`。
-
-## 关于本文件
-
-- 这是本项目规则的**公开主干**：增删规则时同步更新 `knowledge\` 里的明细与索引；
-- **编号会随增删变化**：引用规则按**关键词**，不要按编号。
-
-## 相关
-
-《工作流》（本文件所有指针的落点）《工具链》《验证协议》《题解写法》《归档》《从零讲》
-《已讲过概念清单》《数学 LaTeX》《配图》《环境准备》《牛客抓取》《洛谷抓取》《算法坑集》《反面教材》
-《知识点词典》《学习偏好》
+- Read `docs/architecture.md` before changing storage, API boundaries, or packaging.
+- Back up existing files before editing. Keep backups outside source directories, in `.backups/`. Verify moved source files by SHA-256.
+- Keep the original educational archive and users' live installations read-only during development. Use temporary state for every test. Set `TB_OFFLINE=1` unless a test supplies its own local service.
+- SQLite is the persistent storage for library content, personal progress, and settings/cache documents. Markdown is a rendering/interchange format. Never reintroduce filesystem-dependent solution lookup.
+- Preserve code, identities, records, API keys, and local imports during migration or upgrade. Back up existing databases with SQLite's online backup API, including committed WAL content. Never replace a personal database with a bundled file.
+- Share only public educational data. Distributed content must have no developer progress, credentials, cookies, or absolute machine paths. Translation keys remain protected with DPAPI on Windows.
+- Preserve original site login, CSRF, and submit behavior. Compiler adapters act on actual language controls and use native form events. Do not perform account submissions merely to test an adapter.
+- API write requests require the session token. Cross-origin access requires an explicit frontend origin; keep the default local-origin guards.
+- After backend changes run `python scripts/check.py`. After UI changes run the frontend build and relevant Playwright tests. Run shared-service tests after Worker changes. Packaging requires fresh-install and upgrade checks against disposable state.
+- Report actual checks and limitations. Never claim real official submission or provider success from a fixture. Do not publish releases, deploy services, or merge a PR unless authorized in the conversation.

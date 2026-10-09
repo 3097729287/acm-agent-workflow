@@ -1,44 +1,27 @@
-# 本地配置（每人不同，不入库；由 install.py 生成）
-config.json
-
-# 备份目录（toolutil.backup_to_repo 的落点）
+# Local environments and generated artifacts
 .backups/
-
-# Python
 __pycache__/
-*.pyc
-
-# Node（KaTeX 检查器依赖，npm install 后生成）
-tools/node_modules/
-tools/package.json
-tools/package-lock.json
-
-# C++ 编译产物
-*.exe
-
-# 验证跑完会重建的耗材（可随手删、重跑即回来）
-**/_work/
-__pycache__/
-
-# 图形端本地配置 / 日志（status_gui.py 会写；exe 放在仓库根时写根目录那两份）
-tools/status_gui.config.json
-status_gui.config.json
-TimuZhuangtai.log
-
-# 编辑器 / agent 本地目录
+*.py[cod]
+node_modules/
+frontend/dist/
+frontend/tests/screenshots/
+**/.wrangler/
+**/.dev.vars*
 .vscode/
 .idea/
 .claude/
-
-# TB React desktop local build and personal data
-tools/tb_web/node_modules/
-tools/tb_web/dist/
-tools/tb_web/tests/screenshots/
-**/.wrangler/
-**/.dev.vars*
+.venv/
+build/
+release/
 state/
 cache/
 logs/
 backups/
-*.sqlite*
+compiler/
+*.exe
 *.zip
+*.sqlite*
+!data/library.sqlite3
+legacy/**/_work/
+legacy/**/TimuZhuangtai.log
+legacy/**/status_gui.config.json
