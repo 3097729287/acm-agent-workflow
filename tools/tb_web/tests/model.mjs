@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {matches,organizeCategories,categoryStats} from '../src/model.js';
+const row={contest:'周赛 164',problem:'C',title:'练习',knowledge:'LCA',tags:['LCA'],difficulty:1700,status:'待重写',platform:'牛客'};
+assert.equal(matches(row,'周赛 164 C 1700 待重写'),true);
+assert.equal(matches(row,'周赛 123'),false);
+assert.equal(matches(row,'1600-1800'),true);
+assert.equal(matches({...row,difficulty:null},'1600-1800'),false);
+assert.equal(matches(row,'E'),false);
+const source=[{name:'模拟',tags:['模拟'],children:[]},{name:'线性 DP',tags:['线性 DP','背包 DP'],children:[{name:'背包 DP',tags:['背包 DP'],children:[]}]},{name:'数学',tags:['素数'],children:[{name:'数论',tags:['素数'],children:[]}]},{name:'计数',tags:['组合计数'],children:[]},{name:'新专题',tags:['新专题'],children:[]}];
+const grouped=organizeCategories(source);
+assert.deepEqual(new Set(grouped.flatMap(n=>n.tags)),new Set(source.flatMap(n=>n.tags)));
+assert.equal(grouped.find(n=>n.name==='动态规划').children[0].name,'背包 DP');
+assert.equal(grouped.find(n=>n.name==='数学与计数').children.length,2);
+assert.equal(grouped.find(n=>n.name==='专题方法').children[0].name,'新专题');
+assert.deepEqual(categoryStats({tags:['LCA','图论']},[row,{...row,id:'another',tags:['LCA','图论'],status:'独立AC'}]),{total:2,passed:1,weak:1});
+console.log('MODEL OK: compound search, difficulty ranges, lossless category grouping, unique problem counts');

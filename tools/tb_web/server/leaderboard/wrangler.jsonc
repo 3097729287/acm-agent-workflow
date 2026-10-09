@@ -1,0 +1,19 @@
+{
+  "name": "tb-leaderboard",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-08",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tb-leaderboard",
+      "database_id": "REPLACE_WITH_CREATED_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": { "crons": ["17 * * * *"] },
+  "vars": {
+    "REGISTRATIONS_PER_IP_DAY": "100",
+    "REQUESTS_PER_USER_MINUTE": "120"
+  }
+}

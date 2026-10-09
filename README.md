@@ -4,7 +4,7 @@
 
 不是「请 agent 认真一点」，而是**跑一条命令、看退出码**：验证数字逐字来自实跑，题解格式 18 项逐条查，归档对账退出码 0 才算完。你只负责 review。
 
-[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [English](README.en.md) ｜ [在线文档](https://3097729287.github.io/acm-agent-workflow/) ｜ [MIT](LICENSE) ｜ **v0.1.0 早期演示版**，欢迎来 [Issues](https://github.com/3097729287/acm-agent-workflow/issues) 提意见
+[![ci](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/3097729287/acm-agent-workflow/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/3097729287/acm-agent-workflow?include_prereleases&label=release)](https://github.com/3097729287/acm-agent-workflow/releases) ｜ [English](README.en.md) ｜ [在线文档](https://3097729287.github.io/acm-agent-workflow/) ｜ [MIT](LICENSE) ｜ **TB 0.5.0 桌面版已发布**，欢迎来 [Issues](https://github.com/3097729287/acm-agent-workflow/issues) 提意见
 
 ---
 
@@ -19,7 +19,9 @@
 
 ## 路线 A：用起来
 
-**不装 Python（Windows）：** 到 [Releases](https://github.com/3097729287/acm-agent-workflow/releases) 下载 `TimuZhuangtai-v0.1.0-win64.zip` → 解压 → 双击 `TimuZhuangtai.exe`。
+**TB 训练工作台（Windows 10/11 64 位）：** 到 [0.5.0 Release](https://github.com/3097729287/acm-agent-workflow/releases/tag/v0.5.0) 下载 `TB-Setup-0.5.0-win64.exe`。完整安装包带 Python、C++ 工具链、离线 WebView2 与规范题库；支持每日任务、专项模拟赛、提交历史、自定义 API 与导航组合。详细用法和构建源码见 [tools/tb_web](tools/tb_web/README.md)，共享排行榜服务见 [部署文档](tools/tb_web/server/leaderboard/README.md)。跨用户排行榜仍需部署共享服务。
+
+旧 Tk 图形端与题解流水线继续保留，历史版本在 Releases 中。
 
 一个窗口管你的《题目状态.md》：今天的补题队列、按 `1`~`6` 改状态（写前自动备份）、导入导出别人的题解包。包里自带示例数据，开箱即看；想打开**你自己的**数据，改包里的 `config.json`（见[配置](#配置configjson)）。
 

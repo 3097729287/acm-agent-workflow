@@ -29,3 +29,16 @@ TimuZhuangtai.log
 .vscode/
 .idea/
 .claude/
+
+# TB React desktop local build and personal data
+tools/tb_web/node_modules/
+tools/tb_web/dist/
+tools/tb_web/tests/screenshots/
+**/.wrangler/
+**/.dev.vars*
+state/
+cache/
+logs/
+backups/
+*.sqlite*
+*.zip

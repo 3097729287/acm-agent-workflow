@@ -1,0 +1,573 @@
+{
+  "version": "knowledge-v1.0",
+  "curationVersion": "lectures-v1.0",
+  "problems": {
+    "ABC 472::E": {
+      "id": "ABC 472::E",
+      "addTags": [
+        "二分图判定"
+      ],
+      "removeTags": [],
+      "sourcePath": "AtCoder/ABC/472/472题解.md",
+      "lessonIds": [
+        "lecture:2177dbb1a5c8cadf9a63898c"
+      ],
+      "sourceHashes": [
+        "601f5c2e058b442da084665e916a9576033a59fe17b0d6e03eb8abdb2b2593a6"
+      ]
+    },
+    "ABC 472::G": {
+      "id": "ABC 472::G",
+      "addTags": [
+        "最小割"
+      ],
+      "removeTags": [],
+      "sourcePath": "AtCoder/ABC/472/472题解.md",
+      "lessonIds": [
+        "lecture:2f4fb60a8867cc13d83c7dfd"
+      ],
+      "sourceHashes": [
+        "1166c8eddcc400dce3f2777f472bc7a5b9adfa2d0d9b5a34bbc389b4d139ce82"
+      ]
+    },
+    "ARC 224::B": {
+      "id": "ARC 224::B",
+      "addTags": [
+        "整数平方根"
+      ],
+      "removeTags": [],
+      "sourcePath": "AtCoder/ARC/224/224题解.md",
+      "lessonIds": [
+        "lecture:75f5ad7443c4ef0b3916c8a2"
+      ],
+      "sourceHashes": [
+        "db90f50711105077e0f0cfca939c2168116bb4bafb6a497efc090126ab918cee"
+      ]
+    },
+    "ARC 226::A": {
+      "id": "ARC 226::A",
+      "addTags": [
+        "二分图判定"
+      ],
+      "removeTags": [],
+      "sourcePath": "AtCoder/ARC/226/226题解.md",
+      "lessonIds": [
+        "lecture:446c8437efee0946e996de8d"
+      ],
+      "sourceHashes": [
+        "e182f49f8a2c0df0ec0de6e0c4cbaf65e1433981ddff95e7a7cfbb2819461fcd"
+      ]
+    },
+    "ARC 229::A": {
+      "id": "ARC 229::A",
+      "addTags": [
+        "势能分析"
+      ],
+      "removeTags": [],
+      "sourcePath": "AtCoder/ARC/229/229题解.md",
+      "lessonIds": [
+        "lecture:4e931ca1e10c189be20ef2ab"
+      ],
+      "sourceHashes": [
+        "d2a69463f7df14f8a6f052c850a86ac685edcdd36cc7acd4a0c7be4d2cb5388d"
+      ]
+    },
+    "Div.2 1115::B": {
+      "id": "Div.2 1115::B",
+      "addTags": [
+        "连续段"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.2/1115/1115题解.md",
+      "lessonIds": [
+        "lecture:da920711f8ec6c49e230cb82"
+      ],
+      "sourceHashes": [
+        "c5156458766b98c80b12ebe14ac10aef4084d6707c998866dabb9f201d5d9cc7"
+      ]
+    },
+    "Div.2 1115::F": {
+      "id": "Div.2 1115::F",
+      "addTags": [
+        "虚树"
+      ],
+      "removeTags": [
+        "字典树"
+      ],
+      "sourcePath": "Codeforces/Div.2/1115/1115题解.md",
+      "lessonIds": [
+        "lecture:516aa0bc630d2c1d8de4625a"
+      ],
+      "sourceHashes": [
+        "b398473dff511be5a87b1eb8916147034dd1f116a491685ae54c23d01501fe41"
+      ]
+    },
+    "Div.2 1117::F1": {
+      "id": "Div.2 1117::F1",
+      "addTags": [
+        "矩阵运算"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.2/1117/1117题解.md",
+      "lessonIds": [
+        "lecture:4b2a9b65c3c1d4d34dd57a96"
+      ],
+      "sourceHashes": [
+        "8b3a987c5540834ab55d29c31419d7fa76321cb8c49639ed895f0ac3601c988e"
+      ]
+    },
+    "Div.2 1123::F2": {
+      "id": "Div.2 1123::F2",
+      "addTags": [
+        "位运算"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.2/1123/1123题解.md",
+      "lessonIds": [
+        "lecture:3bfa4875258d671b950a0077"
+      ],
+      "sourceHashes": [
+        "eff8f73813ee4896cce59f3cc24ac2616f39e36c92f5ef797b2a88b4072cbd05"
+      ]
+    },
+    "Div.3 1076::G": {
+      "id": "Div.3 1076::G",
+      "addTags": [
+        "图论"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.3/1076/1076题解.md",
+      "lessonIds": [
+        "lecture:088082931e7978641eaeae16"
+      ],
+      "sourceHashes": [
+        "17995a29c7de16643ee3db0b86e634ad3ff3e317b6d8970a0a1c763e37e8d4c9"
+      ]
+    },
+    "Div.3 1096::D": {
+      "id": "Div.3 1096::D",
+      "addTags": [
+        "Manacher"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.3/1096/1096题解.md",
+      "lessonIds": [
+        "lecture:f57b4d5881f6cf7a35599ea1"
+      ],
+      "sourceHashes": [
+        "bed89117447f5890f383cfd0db0316b231726579ae34c7ffd309718a93548add"
+      ]
+    },
+    "Div.3 1103::E": {
+      "id": "Div.3 1103::E",
+      "addTags": [
+        "单调队列"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.3/1103/1103题解.md",
+      "lessonIds": [
+        "lecture:31fa9f9188ab29ae9a9ba780"
+      ],
+      "sourceHashes": [
+        "5ede98af6f0d37238a64b2a0d887c7c20b337706fd6c03fa4855050b62a991b6"
+      ]
+    },
+    "Div.3 1125::G": {
+      "id": "Div.3 1125::G",
+      "addTags": [
+        "生成树"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.3/1125/1125题解.md",
+      "lessonIds": [
+        "lecture:eace11dd653e69d7688fb92b"
+      ],
+      "sourceHashes": [
+        "1160ce8a86e55c271c0a748df5d73c3fd8d3c381851a1a8ce8cbb7a7ed0ff719"
+      ]
+    },
+    "Div.4 1003::F": {
+      "id": "Div.4 1003::F",
+      "addTags": [
+        "虚树"
+      ],
+      "removeTags": [
+        "字典树"
+      ],
+      "sourcePath": "Codeforces/Div.4/1003/1003题解.md",
+      "lessonIds": [
+        "lecture:4aef255dd58cfc0b804f1b3b"
+      ],
+      "sourceHashes": [
+        "3987383834264a965baed313a831253b5b4c40f68d9eb26cf290bee2bacc2541"
+      ]
+    },
+    "Div.4 971::G2": {
+      "id": "Div.4 971::G2",
+      "addTags": [
+        "扫描线"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.4/971/971题解.md",
+      "lessonIds": [
+        "lecture:135b14ac5a8f6df9f8c0e2a5"
+      ],
+      "sourceHashes": [
+        "db33947c1d16bd1c43236a3eccbfd25a4a7de3f476bad91e54b685754121be14"
+      ]
+    },
+    "Div.4 971::G3": {
+      "id": "Div.4 971::G3",
+      "addTags": [
+        "组合计数"
+      ],
+      "removeTags": [],
+      "sourcePath": "Codeforces/Div.4/971/971题解.md",
+      "lessonIds": [
+        "lecture:bff3f8eef111a9d2fd86fcd7"
+      ],
+      "sourceHashes": [
+        "a5254abd7e82d5a8efd76b7b0a856c4d546e759a1fd6183b87874f81e542787c"
+      ]
+    },
+    "基础赛 36::C": {
+      "id": "基础赛 36::C",
+      "addTags": [
+        "计算几何"
+      ],
+      "removeTags": [],
+      "sourcePath": "洛谷/基础赛/36/36题解.md",
+      "lessonIds": [
+        "lecture:f38e35b2f2a2ce7e0320c13a"
+      ],
+      "sourceHashes": [
+        "adab6d4ad623a9b3eb41cdba148f8ab7b9721351bf3be8dbdfe39d1b4b493bc6"
+      ]
+    },
+    "月赛 303::C": {
+      "id": "月赛 303::C",
+      "addTags": [
+        "Z 函数"
+      ],
+      "removeTags": [
+        "KMP"
+      ],
+      "sourcePath": "洛谷/月赛/303/303题解.md",
+      "lessonIds": [
+        "lecture:119203949ceba2f010c61b04"
+      ],
+      "sourceHashes": [
+        "4cde612a06c4cbea8dd55c17356640ca635bad582d34ae35bb8463217468bccb"
+      ]
+    },
+    "月赛 310::C": {
+      "id": "月赛 310::C",
+      "addTags": [
+        "根号分治"
+      ],
+      "removeTags": [],
+      "sourcePath": "洛谷/月赛/310/310题解.md",
+      "lessonIds": [
+        "lecture:b523ecd8188ae67a69e75298"
+      ],
+      "sourceHashes": [
+        "76e369f3632600ffb88e166fd43d0adce561026d155b776b5a76b567cf303984"
+      ]
+    },
+    "周赛 151::E": {
+      "id": "周赛 151::E",
+      "addTags": [
+        "计算几何"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/周赛/151/151题解.md",
+      "lessonIds": [
+        "lecture:9fdd920cb5fbb1c5787d98d6"
+      ],
+      "sourceHashes": [
+        "aa10f11c6e40cbb2a4a85687647dee6aa69a8b236c04402e43dc277c6e3b92cf"
+      ]
+    },
+    "小白月赛 129::F": {
+      "id": "小白月赛 129::F",
+      "addTags": [
+        "摊还分析"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/小白月赛/129/129题解.md",
+      "lessonIds": [
+        "lecture:1a6c8b1aeebcb87b03b48d51"
+      ],
+      "sourceHashes": [
+        "92340b503752bac2b0148cd02760ddf1039c2dab7dd345105dcc6c9324d72140"
+      ]
+    },
+    "小白月赛 136::F": {
+      "id": "小白月赛 136::F",
+      "addTags": [
+        "可持久化线段树"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/小白月赛/136/136题解.md",
+      "lessonIds": [
+        "lecture:72a93b686e6fb3b4ed849155"
+      ],
+      "sourceHashes": [
+        "e3c644c2b1c74e18d04d8b1d2710b70a3e2549a80c108cf85d663d9f9f5600e9"
+      ]
+    },
+    "挑战赛 87::B": {
+      "id": "挑战赛 87::B",
+      "addTags": [
+        "差分"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/挑战赛/87/87题解.md",
+      "lessonIds": [
+        "lecture:bf1a8c3be8232349221b161d"
+      ],
+      "sourceHashes": [
+        "8ae3341498f8939b908bbcdbcfdeb9f6bf12eca6fa9cedff33b538e6c47d2f9c"
+      ]
+    },
+    "挑战赛 87::C": {
+      "id": "挑战赛 87::C",
+      "addTags": [
+        "倍增"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/挑战赛/87/87题解.md",
+      "lessonIds": [
+        "lecture:5d088249ba6e27a509fe4c90"
+      ],
+      "sourceHashes": [
+        "3cd97fee07b575f4d986474cb3402b196cd439e2ef4f933845f7925dddcc4f0f"
+      ]
+    },
+    "挑战赛 87::D": {
+      "id": "挑战赛 87::D",
+      "addTags": [
+        "虚树"
+      ],
+      "removeTags": [
+        "字典树"
+      ],
+      "sourcePath": "牛客/挑战赛/87/87题解.md",
+      "lessonIds": [
+        "lecture:83403ca2e63974b76380c6f4"
+      ],
+      "sourceHashes": [
+        "43191a089e2b1839af8865c03206812c4fee41dd60be1d70afe96002671ac04a"
+      ]
+    },
+    "挑战赛 88::D": {
+      "id": "挑战赛 88::D",
+      "addTags": [
+        "矩阵运算"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/挑战赛/88/88题解.md",
+      "lessonIds": [
+        "lecture:27bd150624ff237c2ba857be"
+      ],
+      "sourceHashes": [
+        "1b6c517872636c66a547f9628b6d825abf34e547a5c0d00d188277f9b2c64b9d"
+      ]
+    },
+    "挑战赛 90::A": {
+      "id": "挑战赛 90::A",
+      "addTags": [
+        "鸽巢原理"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/挑战赛/90/90题解.md",
+      "lessonIds": [
+        "lecture:ede64d4b19d973ef84b17ffe"
+      ],
+      "sourceHashes": [
+        "d8d48e0e8744f8ade6f6ae53b275d5ad0500ff4086923d70e7563be031384afd"
+      ]
+    },
+    "挑战赛 90::D": {
+      "id": "挑战赛 90::D",
+      "addTags": [
+        "分治优化 DP"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/挑战赛/90/90题解.md",
+      "lessonIds": [
+        "lecture:6c42d2d37f954045992b56dc"
+      ],
+      "sourceHashes": [
+        "49f362f8991564b43f339fa3e3d75651f54676c94cce2b0a7a2c0f4500383eb1"
+      ]
+    },
+    "练习赛 148::F": {
+      "id": "练习赛 148::F",
+      "addTags": [
+        "莫比乌斯反演"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/练习赛/148/148题解.md",
+      "lessonIds": [
+        "lecture:8c7c8e0090faf729bf3d9afc"
+      ],
+      "sourceHashes": [
+        "87393886493b515a95d2f416c33f9de5b9189c38c17964073e7b819deb69ef76"
+      ]
+    },
+    "练习赛 149::G": {
+      "id": "练习赛 149::G",
+      "addTags": [
+        "矩阵运算"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/练习赛/149/149题解.md",
+      "lessonIds": [
+        "lecture:38ec0ca7f5888999187706f5"
+      ],
+      "sourceHashes": [
+        "f5429f1a2d6501b84259dc861852c0680a089fb2329a824ccfa13ecd9166bd57"
+      ]
+    },
+    "练习赛 152::G": {
+      "id": "练习赛 152::G",
+      "addTags": [
+        "后缀自动机"
+      ],
+      "removeTags": [
+        "字典树"
+      ],
+      "sourcePath": "牛客/练习赛/152/152题解.md",
+      "lessonIds": [
+        "lecture:54bc62dbb900021680fbac74"
+      ],
+      "sourceHashes": [
+        "bd8bdb8dbf158c5824a0f2ab629a820acbb1059c50eef26cee11ce0f966081a2"
+      ]
+    },
+    "练习赛 153::F": {
+      "id": "练习赛 153::F",
+      "addTags": [
+        "可撤销并查集"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/练习赛/153/153题解.md",
+      "lessonIds": [
+        "lecture:032bad3c7aa60ad4080da2ae"
+      ],
+      "sourceHashes": [
+        "e62cb30ec1f327a2ef8793d084f9a698373f927269355a1b12e82e7a6cc521d9"
+      ]
+    },
+    "练习赛 154::E": {
+      "id": "练习赛 154::E",
+      "addTags": [
+        "置换环"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/练习赛/154/154题解.md",
+      "lessonIds": [
+        "lecture:b5096f71bbf242753950c4d0"
+      ],
+      "sourceHashes": [
+        "7d243739b278890bf6d1e7b67f49c4d7889185d27043c2d5f0cb6d7c9ab4a4b4"
+      ]
+    },
+    "周赛 163::C": {
+      "id": "周赛 163::C",
+      "addTags": [
+        "Hall 定理"
+      ],
+      "removeTags": [],
+      "sourcePath": "牛客/周赛/163/B-G/C/专题/牛客C-小月的对局-例子详解.md",
+      "lessonIds": [
+        "lecture:2bc3f19c6a77cc1a71e22f48"
+      ],
+      "sourceHashes": [
+        "8fbbfe6a33c10aec180f7376ccd143d715ff7203232eae249dcecaf8f4dd6820"
+      ]
+    }
+  },
+  "aliases": {
+    "remote:atcoder:abc472::E": "ABC 472::E",
+    "remote:atcoder:abc472::G": "ABC 472::G",
+    "remote:atcoder:arc224::B": "ARC 224::B",
+    "remote:atcoder:arc226::A": "ARC 226::A",
+    "remote:atcoder:arc229::A": "ARC 229::A",
+    "remote:codeforces:2252::B": "Div.2 1115::B",
+    "remote:codeforces:2252::F": "Div.2 1115::F",
+    "remote:codeforces:2257::F1": "Div.2 1117::F1",
+    "remote:codeforces:2267::F2": "Div.2 1123::F2",
+    "remote:codeforces:2193::G": "Div.3 1076::G",
+    "remote:codeforces:2227::D": "Div.3 1096::D",
+    "remote:codeforces:2236::E": "Div.3 1103::E",
+    "remote:codeforces:2275::G": "Div.3 1125::G",
+    "remote:codeforces:2065::F": "Div.4 1003::F",
+    "remote:codeforces:2009::G2": "Div.4 971::G2",
+    "remote:codeforces:2009::G3": "Div.4 971::G3",
+    "remote:luogu:318072::C": "基础赛 36::C",
+    "remote:luogu:323264::C": "月赛 303::C",
+    "remote:luogu:278842::C": "月赛 310::C",
+    "remote:nowcoder:137267::E": "周赛 151::E",
+    "remote:nowcoder:128675::F": "小白月赛 129::F",
+    "remote:nowcoder:139208::F": "小白月赛 136::F",
+    "remote:nowcoder:130844::B": "挑战赛 87::B",
+    "remote:nowcoder:130844::C": "挑战赛 87::C",
+    "remote:nowcoder:130844::D": "挑战赛 87::D",
+    "remote:nowcoder:134814::D": "挑战赛 88::D",
+    "remote:nowcoder:137418::A": "挑战赛 90::A",
+    "remote:nowcoder:137418::D": "挑战赛 90::D",
+    "remote:nowcoder:127263::F": "练习赛 148::F",
+    "remote:nowcoder:129232::G": "练习赛 149::G",
+    "remote:nowcoder:133522::G": "练习赛 152::G",
+    "remote:nowcoder:134820::F": "练习赛 153::F",
+    "remote:nowcoder:135884::E": "练习赛 154::E"
+  },
+  "urls": {
+    "atcoder.jp/contests/abc472/tasks/abc472_e": "ABC 472::E",
+    "atcoder.jp/contests/abc472/tasks/abc472_g": "ABC 472::G",
+    "atcoder.jp/contests/arc224/tasks/arc224_b": "ARC 224::B",
+    "atcoder.jp/contests/arc226/tasks/arc226_a": "ARC 226::A",
+    "atcoder.jp/contests/arc229/tasks/arc229_a": "ARC 229::A",
+    "codeforces.com/problemset/problem/2252/B": "Div.2 1115::B",
+    "codeforces.com/contest/2252/problem/B": "Div.2 1115::B",
+    "codeforces.com/problemset/problem/2252/F": "Div.2 1115::F",
+    "codeforces.com/contest/2252/problem/F": "Div.2 1115::F",
+    "codeforces.com/problemset/problem/2257/F1": "Div.2 1117::F1",
+    "codeforces.com/contest/2257/problem/F1": "Div.2 1117::F1",
+    "codeforces.com/problemset/problem/2267/F2": "Div.2 1123::F2",
+    "codeforces.com/contest/2267/problem/F2": "Div.2 1123::F2",
+    "codeforces.com/problemset/problem/2193/G": "Div.3 1076::G",
+    "codeforces.com/contest/2193/problem/G": "Div.3 1076::G",
+    "codeforces.com/problemset/problem/2227/D": "Div.3 1096::D",
+    "codeforces.com/contest/2227/problem/D": "Div.3 1096::D",
+    "codeforces.com/problemset/problem/2236/E": "Div.3 1103::E",
+    "codeforces.com/contest/2236/problem/E": "Div.3 1103::E",
+    "codeforces.com/problemset/problem/2275/G": "Div.3 1125::G",
+    "codeforces.com/contest/2275/problem/G": "Div.3 1125::G",
+    "codeforces.com/problemset/problem/2065/F": "Div.4 1003::F",
+    "codeforces.com/contest/2065/problem/F": "Div.4 1003::F",
+    "codeforces.com/problemset/problem/2009/G2": "Div.4 971::G2",
+    "codeforces.com/contest/2009/problem/G2": "Div.4 971::G2",
+    "codeforces.com/problemset/problem/2009/G3": "Div.4 971::G3",
+    "codeforces.com/contest/2009/problem/G3": "Div.4 971::G3",
+    "www.luogu.com.cn/problem/P16955": "基础赛 36::C",
+    "www.luogu.com.cn/problem/P17556": "月赛 303::C",
+    "www.luogu.com.cn/problem/P17540": "月赛 310::C",
+    "ac.nowcoder.com/acm/contest/137267/E": "周赛 151::E",
+    "ac.nowcoder.com/acm/contest/128675/F": "小白月赛 129::F",
+    "ac.nowcoder.com/acm/contest/139208/F": "小白月赛 136::F",
+    "ac.nowcoder.com/acm/contest/130844/B": "挑战赛 87::B",
+    "ac.nowcoder.com/acm/contest/130844/C": "挑战赛 87::C",
+    "ac.nowcoder.com/acm/contest/130844/D": "挑战赛 87::D",
+    "ac.nowcoder.com/acm/contest/134814/D": "挑战赛 88::D",
+    "ac.nowcoder.com/acm/contest/137418/A": "挑战赛 90::A",
+    "ac.nowcoder.com/acm/contest/137418/D": "挑战赛 90::D",
+    "ac.nowcoder.com/acm/contest/127263/F": "练习赛 148::F",
+    "ac.nowcoder.com/acm/contest/129232/G": "练习赛 149::G",
+    "ac.nowcoder.com/acm/contest/133522/G": "练习赛 152::G",
+    "ac.nowcoder.com/acm/contest/134820/F": "练习赛 153::F",
+    "ac.nowcoder.com/acm/contest/135884/E": "练习赛 154::E"
+  }
+}
