@@ -68,6 +68,7 @@ jobs:
       - run: npm run test:math
       - run: npm run test:compilers
       - run: npm run test:ui
+      - run: npm run test:issues
       - run: npm run test:workbench
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
