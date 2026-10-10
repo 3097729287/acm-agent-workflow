@@ -28,6 +28,17 @@ CREATE TABLE IF NOT EXISTS problem_lectures(
  PRIMARY KEY(problem_id, lecture_id));
 '''
 
+def source_fingerprint(directory):
+    """Stable fingerprint of the text seed; merge_seed uses it instead of file bytes."""
+    directory = Path(directory)
+    digest = hashlib.sha256()
+    for name in sorted(path.name for path in directory.glob('*.json')):
+        digest.update(name.encode('utf-8'))
+        digest.update(b'\x00')
+        digest.update((directory / name).read_bytes())
+    return digest.hexdigest()
+
+
 class LibraryDatabase:
     def __init__(self, path, readonly=False):
         self.path = Path(path).resolve()
@@ -74,10 +85,11 @@ class LibraryDatabase:
                 destination.close()
         return target
 
-    def merge_seed(self, path):
+    def merge_seed(self, path, fingerprint=None):
         """Upgrade bundled content, preserving locally imported/edited rows and fetched statements."""
         path = Path(path).resolve()
-        fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()
+        if fingerprint is None:
+            fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()
         if self.metadata().get('bundled_sha256') == fingerprint:
             return False
         seed = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
@@ -243,3 +255,75 @@ class LibraryDatabase:
         if integrity != 'ok' or broken:
             raise ValueError('Invalid library database')
         return counts
+
+    def export_source(self, directory):
+        """Write the public library as deterministic text JSON for version control.
+
+        The SQLite file remains a build artifact; the returned directory is the
+        git-tracked source that first start or packaging rebuilds from.
+        """
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        with self.connection() as db:
+            meta = dict(db.execute('SELECT key,value FROM library_meta'))
+            problems = [{'id': row['id'], 'url': row['url'], 'raw': json.loads(row['raw']),
+                         'encoded': json.loads(row['encoded'])}
+                        for row in db.execute('SELECT id,url,raw,encoded FROM problems ORDER BY id')]
+            solutions = [{'problem_id': row['problem_id'], 'markdown': row['markdown'],
+                          'source_path': row['source_path'], 'images': json.loads(row['images'])}
+                         for row in db.execute('SELECT problem_id,markdown,source_path,images FROM solutions ORDER BY problem_id')]
+            statements = [{'problem_id': row['problem_id'], 'content': json.loads(row['content'])}
+                          for row in db.execute('SELECT problem_id,content FROM statements ORDER BY problem_id')]
+            lectures = [{'id': row['id'], 'content': json.loads(row['content'])}
+                        for row in db.execute('SELECT id,content FROM lectures ORDER BY id')]
+            links = [{'problem_id': row['problem_id'], 'lecture_id': row['lecture_id'],
+                      'kind': row['kind'], 'position': row['position']}
+                     for row in db.execute('SELECT problem_id,lecture_id,kind,position FROM problem_lectures ORDER BY problem_id,position')]
+        def dump(name, value):
+            (directory / name).write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
+        dump('meta.json', meta)
+        dump('problems.json', problems)
+        dump('solutions.json', solutions)
+        dump('statements.json', statements)
+        dump('lectures.json', lectures)
+        dump('links.json', links)
+        return directory
+
+    @classmethod
+    def from_source(cls, directory, path):
+        """Rebuild a SQLite seed from the text source checked into git."""
+        directory = Path(directory)
+        def load(name):
+            with (directory / name).open(encoding='utf-8') as handle:
+                return json.load(handle)
+        problems = load('problems.json')
+        solutions = load('solutions.json')
+        statements = load('statements.json')
+        lectures = load('lectures.json')
+        links = load('links.json')
+        meta = load('meta.json')
+        database = cls(path)
+        with database.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.executemany('INSERT OR REPLACE INTO problems (id,url,raw,encoded) VALUES (?,?,?,?)',
+                           [(p['id'], p['url'], json.dumps(p['raw'], ensure_ascii=False), json.dumps(p['encoded'], ensure_ascii=False))
+                            for p in problems])
+            db.executemany('INSERT OR REPLACE INTO solutions (problem_id,markdown,source_path,images,digest) VALUES (?,?,?,?,?)',
+                           [(s['problem_id'], s['markdown'], s['source_path'], json.dumps(s['images'], ensure_ascii=False),
+                             hashlib.sha256(s['markdown'].encode()).hexdigest()) for s in solutions])
+            db.executemany('INSERT OR REPLACE INTO statements (problem_id,content) VALUES (?,?)',
+                           [(st['problem_id'], json.dumps(st['content'], ensure_ascii=False)) for st in statements])
+            db.executemany('INSERT OR REPLACE INTO lectures (id,content,digest) VALUES (?,?,?)',
+                           [(lecture['id'], json.dumps(lecture['content'], ensure_ascii=False),
+                             hashlib.sha256(lecture['content']['markdown'].encode()).hexdigest()) for lecture in lectures])
+            db.executemany('INSERT OR REPLACE INTO problem_lectures (problem_id,lecture_id,kind,position) VALUES (?,?,?,?)',
+                           [(link['problem_id'], link['lecture_id'], link['kind'], link['position']) for link in links])
+            for key, value in meta.items():
+                db.execute('INSERT INTO library_meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (key, value))
+            cls._rebuild_urls(db)
+            if db.execute('PRAGMA foreign_key_check').fetchall():
+                raise ValueError('Library source has broken references')
+        with database.connection() as db:
+            if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                raise ValueError('Rebuilt library failed integrity check')
+        return database
