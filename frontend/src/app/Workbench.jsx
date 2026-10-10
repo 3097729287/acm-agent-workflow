@@ -8,9 +8,9 @@ import {
   Code2, Copy, ExternalLink, FileCode2, History, LoaderCircle,
   PanelLeft, PanelsTopLeft, Play, RotateCcw, Save, Send, Terminal,
 } from 'lucide-react';
-import { normalizeMarkdown } from './normalizeMarkdown.js';
-import { normalizeStatement } from './normalizeStatement.js';
-import CodeEditor from './CodeEditor.jsx';
+import { normalizeMarkdown } from '@/lib/normalizeMarkdown.js';
+import { normalizeStatement } from '@/lib/normalizeStatement.js';
+import CodeEditor from '@/components/CodeEditor.jsx';
 import './Workbench.css';
 
 const TEMPLATE = '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n\n    \n    return 0;\n}\n';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {matches,organizeCategories,categoryStats} from '../src/model.js';
+import {matches,organizeCategories,categoryStats} from '../src/models/model.js';
 const row={contest:'周赛 164',problem:'C',title:'练习',knowledge:'LCA',tags:['LCA'],difficulty:1700,status:'待重写',platform:'牛客'};
 assert.equal(matches(row,'周赛 164 C 1700 待重写'),true);
 assert.equal(matches(row,'周赛 123'),false);
