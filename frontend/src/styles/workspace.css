@@ -353,25 +353,6 @@ kbd {
 .nav-item > span:first-of-type {
   flex: 1;
 }
-.nav-item kbd {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  opacity: 0.5;
-}
-.nav-item:hover kbd,
-.nav-item:focus-visible kbd {
-  opacity: 1;
-}
-.nav-badge {
-  font-size: calc(var(--ui-font-size, 15px) - 3px);
-  min-width: 21px;
-  padding: 0 4px;
-  text-align: center;
-  background: var(--panel-2);
-  color: var(--accent);
-  border-radius: 4px;
-}
 .live-dot,
 .notification-dot {
   width: 6px;
@@ -1174,6 +1155,40 @@ kbd {
   font-size: calc(var(--ui-font-size, 15px) - 3px);
   margin-right: 4px;
   font-weight: 400;
+}
+.library-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: calc(var(--ui-font-size, 15px) - 2px);
+}
+.library-pagination label,
+.pagination-actions,
+.pagination-actions button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.library-pagination select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+}
+.pagination-actions button {
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+.pagination-actions button:not(:disabled):hover {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .list-footer {
   flex-shrink: 0;

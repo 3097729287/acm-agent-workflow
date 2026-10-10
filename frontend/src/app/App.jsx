@@ -510,6 +510,8 @@ export default function App() {
     [todayQuery, setTodayQuery] = useState(""),
     [todayQueue, setTodayQueue] = useState("all"),
     [showFilters, setShowFilters] = useState(false);
+  const [libraryPage, setLibraryPage] = useState(1),
+    [libraryPageSize, setLibraryPageSize] = useState(50);
   const [selected, setSelected] = useState(null),
     [practiceId, setPracticeId] = useState(null),
     [mockSlot, setMockSlot] = useState(null),
@@ -777,13 +779,23 @@ export default function App() {
     workspace.sets,
     workspace.contests,
   ]);
+  const libraryPages = Math.max(1, Math.ceil(visible.length / libraryPageSize)),
+    currentLibraryPage = Math.min(libraryPage, libraryPages),
+    libraryStart = (currentLibraryPage - 1) * libraryPageSize;
+  const displayedRows = useMemo(
+    () => page === "library" ? visible.slice(libraryStart, libraryStart + libraryPageSize) : visible,
+    [page, visible, libraryStart, libraryPageSize],
+  );
+  useEffect(() => { setLibraryPage(1); }, [filters.library, libraryQuery]);
+  useEffect(() => { if (page === "library") setLibraryPage(currentLibraryPage); }, [page, currentLibraryPage]);
+  useEffect(() => { if (page === "library") listRef.current?.scrollTo({ top: 0 }); }, [page, currentLibraryPage, libraryPageSize]);
   visibleRef.current = visible;
   selectedRef.current = selected;
   useEffect(() => {
     if (!["mine", "library", "today"].includes(page) || practiceId) return;
-    if (!visible.some((r) => r.id === selected))
-      setSelected(visible[0]?.id || null);
-  }, [visible, page, practiceId, selected]);
+    if (!displayedRows.some((r) => r.id === selected))
+      setSelected(displayedRows[0]?.id || null);
+  }, [displayedRows, page, practiceId, selected]);
   useEffect(() => {
     if (practiceId || !selected) return;
     const element = listRef.current?.querySelector(
@@ -933,15 +945,18 @@ export default function App() {
     const context = contextRef.current;
     setPracticeId(null);
     setReaderId(null);
-    if (advanceRef.current && context)
-      setSelected(
-        nextSurviving(
+    if (context) {
+      const id = advanceRef.current ? nextSurviving(
           context.ids,
           advanceRef.current,
           visibleRef.current.map((r) => r.id),
-        ),
-      );
-    else if (context) setSelected(context.id);
+        ) : context.id;
+      if (page === "library") {
+        const index = visibleRef.current.findIndex(row => row.id === id);
+        if (index >= 0) setLibraryPage(Math.floor(index / libraryPageSize) + 1);
+      }
+      setSelected(id);
+    }
     advanceRef.current = null;
     focusList();
     api("workspace")
@@ -1270,9 +1285,9 @@ export default function App() {
               : e.key === "PageDown"
                 ? 10
                 : -10;
-        setSelected(
-          items[Math.max(0, Math.min(items.length - 1, index))]?.id || null,
-        );
+        const nextIndex = Math.max(0, Math.min(items.length - 1, index));
+        if (page === "library") setLibraryPage(Math.floor(nextIndex / libraryPageSize) + 1);
+        setSelected(items[nextIndex]?.id || null);
         list.focus();
       }
       if (e.key === "Enter" && selectedRef.current) {
@@ -1837,7 +1852,22 @@ export default function App() {
             </div>
           )}
         {toolbar()}
-        {renderTable(visible, { today: page === "today" })}
+        {renderTable(displayedRows, { today: page === "today" })}
+        {page === "library" && (
+          <nav className="library-pagination" aria-label="题库分页">
+            <label>每页
+              <select aria-label="题库每页题数" value={libraryPageSize} onChange={(event) => { setLibraryPageSize(Number(event.target.value)); setLibraryPage(1); }}>
+                {[25, 50, 100].map(size => <option key={size} value={size}>{size} 题</option>)}
+              </select>
+            </label>
+            <span role="status">{visible.length ? `${libraryStart + 1}–${Math.min(libraryStart + libraryPageSize, visible.length)}` : "0"} / {visible.length} 题</span>
+            <div className="pagination-actions">
+              <button aria-label="题库上一页" disabled={currentLibraryPage === 1} onClick={() => setLibraryPage(currentLibraryPage - 1)}><ChevronLeft size={15} />上一页</button>
+              <span>第 {currentLibraryPage} / {libraryPages} 页</span>
+              <button aria-label="题库下一页" disabled={currentLibraryPage === libraryPages} onClick={() => setLibraryPage(currentLibraryPage + 1)}>下一页<ChevronRight size={15} /></button>
+            </div>
+          </nav>
+        )}
         <div className="list-footer">
           <span>
             {page === "library"
@@ -2241,13 +2271,7 @@ export default function App() {
               {!prefs.collapsed && (
                 <>
                   <span>{p.label}</span>
-                  {p.id === "today" && dueCount > 0 ? (
-                    <small className="nav-badge">{dueCount}</small>
-                  ) : p.id === "mock" && active ? (
-                    <span className="live-dot" />
-                  ) : (
-                    p.key ? <kbd>{p.key}</kbd> : null
-                  )}
+                  {p.id === "mock" && active && <span className="live-dot" />}
                 </>
               )}
             </button>

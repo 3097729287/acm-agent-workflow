@@ -1,6 +1,33 @@
-// Adapt legacy Typora formula boundaries for CommonMark, only while displaying.
+// Adapt platform/LaTeX and legacy Typora formula boundaries while displaying.
 // Code, escaped dollars, and unmatched delimiters remain unchanged.
 function escaped(text,index){let slashes=0;for(let i=index-1;i>=0&&text[i]==='\\';i--)slashes++;return slashes%2===1}
+
+function closing(text, marker, start, singleLine=false){
+  for(let index=start;index<text.length;index++){
+    if(singleLine&&text[index]==='\n')return -1;
+    if(text.startsWith(marker,index)&&!escaped(text,index))return index;
+    if(text[index]==='`'){
+      let end=index;while(text[end]==='`')end++;
+      const delimiter=text.slice(index,end),finish=text.indexOf(delimiter,end);
+      if(finish>=0)index=finish+delimiter.length-1;
+    }
+  }
+  return -1;
+}
+
+function display(out, body, suffix){
+  if(out.slice(out.lastIndexOf('\n')+1).trim())out+='\n\n';
+  out+='$$'+(body.startsWith('\n')?'':'\n')+body+(body.endsWith('\n')?'':'\n')+'$$';
+  if(suffix.split('\n',1)[0].trim())out+='\n\n';
+  return out;
+}
+
+function inlineFormula(out, body, suffix){
+  if(out.endsWith('$')&&!escaped(out,out.length-1))out+=' ';
+  out+='$'+body+'$';
+  if(suffix.startsWith('$')||suffix.startsWith('\\('))out+=' ';
+  return out;
+}
 
 function prose(text){
   let out='',i=0,inline=false;
@@ -10,9 +37,27 @@ function prose(text){
       const marker=text.slice(i,end),close=text.indexOf(marker,end);
       if(close>=0){out+=text.slice(i,close+marker.length);i=close+marker.length;continue}
     }
+    if(!inline&&text[i]==='\\'&&!escaped(text,i)&&['(', '['].includes(text[i+1])){
+      const block=text[i+1]==='[',end=i+2;
+      const close=closing(text,block?'\\]':'\\)',end,!block);
+      if(close>=0){
+        const body=text.slice(end,close);
+        out=block?display(out,body,text.slice(close+2)):inlineFormula(out,body,text.slice(close+2));
+        i=close+2;continue;
+      }
+    }
     if(text[i]!=='$'||escaped(text,i)){out+=text[i++];continue}
     let end=i;while(text[end]==='$')end++;
     const count=end-i;
+    if(count===3&&!inline){
+      // Codeforces uses $$$...$$$ for inline math, including adjacent runs.
+      const close=closing(text,'$$$',end);
+      if(close>=0){
+        const body=text.slice(end,close);
+        out=body.includes('\n')?display(out,body,text.slice(close+3)):inlineFormula(out,body,text.slice(close+3));
+        i=close+3;continue;
+      }
+    }
     if(count===1){
       // Avoid interpreting an unmatched currency/dollar as an inline opener.
       const lineEnd=text.indexOf('\n',end),limit=lineEnd<0?text.length:lineEnd;
@@ -39,11 +84,7 @@ function prose(text){
     const body=text.slice(end,close);
     if(!body.includes('\n')){out+=text.slice(i,close+2);i=close+2;continue}
     // Multiline display math needs both delimiter runs on their own lines.
-    const prefix=out.slice(out.lastIndexOf('\n')+1);
-    const suffix=text.slice(close+2).split('\n',1)[0];
-    if(prefix.trim())out+='\n\n';
-    out+='$$'+(body.startsWith('\n')?'':'\n')+body+(body.endsWith('\n')?'':'\n')+'$$';
-    if(suffix.trim())out+='\n\n';
+    out=display(out,body,text.slice(close+2));
     i=close+2;
   }
   return out;
