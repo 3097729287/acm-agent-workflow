@@ -29,10 +29,13 @@ npm test
 
 ```powershell
 python scripts/import_library.py --archive <包含题解目录的数据根> --output data/library.sqlite3
+python scripts/library_seed.py export   # sqlite -> data/library/*.json
 python scripts/check.py --library-only
 ```
 
 导入只读源归档，清除分发库的个人状态，保存可移植题解、题面、图片和精确讲义关系。生成前保留原库备份；不要将个人工作数据库替换为公共库。
+
+`data/library.sqlite3` 不进入 git，git 管理的是其文本源 `data/library/*.json`。改完题库后运行 `export` 提交文本源；clone 或打包时 `data/library.sqlite3` 缺失会自动由文本源重建（`scripts/library_seed.py build` 可手动触发）。
 
 ## Windows 安装包
 

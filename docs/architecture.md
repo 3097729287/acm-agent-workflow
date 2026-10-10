@@ -10,11 +10,14 @@
 
 | 文件 | 内容 | 分发与升级 |
 | --- | --- | --- |
-| `data/library.sqlite3` | 公共题目、题面、题解、讲义及精确关系 | 随包分发，无个人进度 |
+| `data/library/` | 公共题目、题面、题解、讲义及精确关系（文本 JSON 源） | git 管理的可 diff 文本；首次启动或打包时重建 |
+| `data/library.sqlite3` | 由文本源重建的二进制题库 | 随包分发，无个人进度；构建产物，不进入 git |
 | `state/tb-library.sqlite3` | 可更新的题库工作副本、导入内容、抓取题面 | 首次合并内置库，后续按来源摘要合并；保护本地修改 |
 | `state/tb-personal.sqlite3` | 训练、提交代码、草稿、模拟赛、身份、任务和经验 | 永不由安装包覆盖 |
 | `state/tb-documents.sqlite3` 及缓存子目录同名数据库 | 设置、加密翻译凭据、公开 HTTP 缓存、知识分析等 JSON 形状文档 | SQLite 事务写入；旧 JSON 只迁入一次 |
 | `state/backups/` | 升级、导入前的 SQLite 在线备份 | 保留已提交 WAL 内容 |
+
+`data/library/` 下是随包题库的文本源：`meta.json`、`problems.json`、`solutions.json`、`statements.json`、`lectures.json`、`links.json`。`data/library.sqlite3` 是构建产物，不被 git 跟踪：首次启动时若缺失会由 `backend/store.py` 自动重建，`scripts/build_release.py` 打包时同样保证重建，`scripts/check.py` 校验前也会补齐。维护者用 `python scripts/library_seed.py export` 从 sqlite 导出文本源，用 `python scripts/library_seed.py build` 重建 sqlite。内容升级按文本源指纹（`bundled_sha256`）判定，与 sqlite 文件字节无关。
 
 `TB_STATE_DIR` 可覆盖状态目录，`TB_LIBRARY_DB` 可指定工作题库，`TB_ARCHIVE_ROOT` 指定显式导入/收件箱根目录，`TB_BACKUP_DIR` 可指定个人记录备份目录。默认状态在程序目录的 `state/`；Windows 安装到当前用户可写目录。
 

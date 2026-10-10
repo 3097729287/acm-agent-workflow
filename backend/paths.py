@@ -8,6 +8,7 @@ RESOURCES = ROOT / 'resources' if getattr(sys, 'frozen', False) else ROOT / 'bac
 STATE = Path(os.environ.get('TB_STATE_DIR') or ROOT / 'state').resolve()
 FRONTEND = ROOT / 'frontend' / 'dist'
 LIBRARY_SEED = ROOT / 'data' / 'library.sqlite3'
+LIBRARY_SOURCE = ROOT / 'data' / 'library'
 
 def resource(name):
     return RESOURCES / name

@@ -280,7 +280,8 @@ class LibraryDatabase:
                       'kind': row['kind'], 'position': row['position']}
                      for row in db.execute('SELECT problem_id,lecture_id,kind,position FROM problem_lectures ORDER BY problem_id,position')]
         def dump(name, value):
-            (directory / name).write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
+            # LF-only: .gitattributes forces eol=lf, keeping the fingerprint stable across checkouts.
+            (directory / name).write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8', newline='\n')
         dump('meta.json', meta)
         dump('problems.json', problems)
         dump('solutions.json', solutions)
