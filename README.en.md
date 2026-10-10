@@ -12,7 +12,7 @@ The bundled SQLite library contains 607 problems, 607 editorials and 378 foundat
 
 Use **Run** for samples, **Local submit** for available local tests, and **Official submit** for the original site's authenticated submission form. Sample passes, reviewed local passes and official results are tracked separately. Daily missions, practice recommendations and knowledge coverage use actual training evidence.
 
-The API starts independently of the React frontend. `frontend/` contains the UI, `backend/` owns HTTP and SQLite, `desktop/` owns the native shell and official-site adapters, and `server/leaderboard/` contains the Cloudflare Worker + D1 service. The earlier workflow is preserved under `legacy/` and is excluded from application builds.
+The API starts independently of the React frontend. `frontend/` contains the UI, `backend/` owns HTTP and SQLite, `desktop/` owns the native shell and official-site adapters, and `server/leaderboard/` contains the Cloudflare Worker + D1 service.
 
 The shared ranking client defaults to https://tb-leaderboard.fsxxxg.workers.dev/. It sends only identity/nickname and summaries of first reviewed local passes. Code, drafts, provider keys and site cookies stay local. Translation supports DeepSeek and custom compatible APIs, preserves code/math/examples, and includes a connection test.
 

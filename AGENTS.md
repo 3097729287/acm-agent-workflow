@@ -1,6 +1,6 @@
 # TB development rules
 
-TB is the primary product. Active code belongs in `frontend/`, `backend/`, `desktop/`, and `server/leaderboard/`. The former agent workflow and obsolete UI are preserved in `legacy/`; they are outside the application build and CI.
+TB is the primary product. Active code belongs in `frontend/`, `backend/`, `desktop/`, and `server/leaderboard/`.
 
 - Read `docs/architecture.md` before changing storage, API boundaries, or packaging.
 - Back up existing files before editing. Keep backups outside source directories, in `.backups/`. Verify moved source files by SHA-256.
