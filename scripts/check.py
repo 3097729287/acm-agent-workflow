@@ -11,7 +11,15 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def library_check():
+    source = ROOT / 'data' / 'library'
     path = ROOT / 'data' / 'library.sqlite3'
+    if not path.is_file() and source.is_dir():
+        sys.path.insert(0, str(ROOT / 'backend'))
+        sys.path.insert(0, str(ROOT / 'backend' / 'common'))
+        from library import LibraryDatabase
+        LibraryDatabase.from_source(source, path)
+    if not path.is_file():
+        raise AssertionError('Missing bundled library and its text source under data/library/')
     with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) as db:
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         assert not db.execute('PRAGMA foreign_key_check').fetchall()

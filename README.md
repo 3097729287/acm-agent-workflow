@@ -36,7 +36,7 @@ frontend/           React 界面，独立开发与构建
 backend/            本机 HTTP API、SQLite 存储、训练与评测服务
 backend/resources/  标准知识点和公开来源配置
 desktop/           桌面窗口及官方提交适配
-data/              随包分发的公共 library.sqlite3
+data/              library/ 文本源与重建出的公共 library.sqlite3
 server/leaderboard/ Cloudflare Worker + D1 共享排行服务
 scripts/           内容导入、检查与构建
 packaging/         Windows 安装程序
@@ -47,7 +47,7 @@ docs/              使用、架构、开发与迁移说明
 
 ## 数据与升级
 
-内置题库位于 `data/library.sqlite3`。运行时数据位于 `state/`：题库工作副本、个人训练数据库和设置文档数据库彼此独立。升级更新公共题库，保留个人记录、身份、加密配置和用户导入内容；写入前会备份已有题库。
+内置题库以文本源 `data/library/`（JSON）进入 git，`data/library.sqlite3` 是其构建产物：首次启动缺失时自动重建，打包与离线检查也会补齐（`scripts/library_seed.py export|build` 手动导出/重建）。运行时数据位于 `state/`：题库工作副本、个人训练数据库和设置文档数据库彼此独立。升级更新公共题库，保留个人记录、身份、加密配置和用户导入内容；写入前会备份已有题库。
 
 0.5 版本的 SQLite 个人记录直接沿用，JSON 配置在首次使用时迁入 SQLite，源文件保留。安装程序可显式导入旧 DSH 安装的记录。详见 [数据与迁移](docs/architecture.md#数据与迁移)。
 

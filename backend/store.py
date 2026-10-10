@@ -8,8 +8,8 @@ import shutil
 import threading
 from errors import APIError
 from insights import canonical_url
-from library import LibraryDatabase
-from paths import LIBRARY_SEED, STATE
+from library import LibraryDatabase, source_fingerprint
+from paths import LIBRARY_SEED, LIBRARY_SOURCE, STATE
 import toolutil
 import knowledge_dict as KD
 import status_report as SR
@@ -23,9 +23,13 @@ class Store:
         self.data_file = Path(data_file or Path(self.data_root) / '题解' / 'TB.md').resolve()
         state = Path(history_file).parent if history_file else self.data_file.parent if data_file else STATE
         target = Path(library_file or os.environ.get('TB_LIBRARY_DB') or state / 'tb-library.sqlite3').resolve()
+        if data_file is None and not LIBRARY_SEED.is_file() and LIBRARY_SOURCE.is_dir():
+            # The SQLite seed is a build artifact; rebuild it from the text source on first start.
+            LibraryDatabase.from_source(LIBRARY_SOURCE, LIBRARY_SEED)
         self.library = LibraryDatabase(target)
         if data_file is None and LIBRARY_SEED.is_file() and target != LIBRARY_SEED.resolve():
-            self.library.merge_seed(LIBRARY_SEED)
+            fingerprint = source_fingerprint(LIBRARY_SOURCE) if LIBRARY_SOURCE.is_dir() else None
+            self.library.merge_seed(LIBRARY_SEED, fingerprint=fingerprint)
         if not self.library.rows() and self.data_file.is_file():
             from archive_import import import_archive
             import_archive(self.library, self.data_root, self.data_file)

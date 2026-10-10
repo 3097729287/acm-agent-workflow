@@ -51,6 +51,12 @@ def assemble(args):
     if not (ROOT / 'frontend' / 'dist' / 'index.html').is_file():
         raise RuntimeError('Build the frontend before assembling')
     seed = ROOT / 'data' / 'library.sqlite3'
+    source = ROOT / 'data' / 'library'
+    if not seed.is_file() and source.is_dir():
+        sys.path.insert(0, str(ROOT / 'backend'))
+        sys.path.insert(0, str(ROOT / 'backend' / 'common'))
+        from library import LibraryDatabase
+        LibraryDatabase.from_source(source, seed)
     with sqlite3.connect(seed.as_uri() + '?mode=ro', uri=True) as db:
         if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok' or db.execute('PRAGMA foreign_key_check').fetchall():
             raise RuntimeError('Invalid bundled SQLite library')
