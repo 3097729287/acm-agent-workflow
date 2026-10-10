@@ -1,4 +1,4 @@
-import { request } from './api/client';
+import { request } from '@/api/client';
 import {
   useState,
   useEffect,
@@ -61,8 +61,8 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import Workbench from "./Workbench.jsx";
-import { LecturesPanel, LectureDisclosure } from "./LecturesPanel.jsx";
-import { difficultyBand, solutionBlocks } from "./practiceMetadata.js";
+import { LecturesPanel, LectureDisclosure } from "@/pages/LecturesPanel.jsx";
+import { difficultyBand, solutionBlocks } from "@/lib/practiceMetadata.js";
 import {
   GrowthPage,
   ActivityPage,
@@ -71,13 +71,13 @@ import {
   UpdatePanel,
   TranslationSettings,
   AchievementPanel,
-} from "./ProgressPanels.jsx";
-import { organizeCategories } from "./model.js";
-import NavigationSettings, { orderedPages } from "./NavigationSettings.jsx";
-import RankingsPage, { ProfileSettings } from "./CommunityPanel.jsx";
+} from "@/pages/ProgressPanels.jsx";
+import { organizeCategories } from "@/models/model.js";
+import NavigationSettings, { orderedPages } from "@/pages/NavigationSettings.jsx";
+import RankingsPage, { ProfileSettings } from "@/pages/CommunityPanel.jsx";
 import MockSetup from "./MockSetup.jsx";
-import SubmissionRecords, { MockHistory } from "./SubmissionRecords.jsx";
-import { normalizeMarkdown } from "./normalizeMarkdown.js";
+import SubmissionRecords, { MockHistory } from "@/pages/SubmissionRecords.jsx";
+import { normalizeMarkdown } from "@/lib/normalizeMarkdown.js";
 import {
   QUEUES,
   verdictLabel,
@@ -90,7 +90,7 @@ import {
   timerText,
   nextSurviving,
   emptyWorkspace,
-} from "./workspaceModel.js";
+} from "@/models/workspaceModel.js";
 
 const PAGES = [
   { id: "mine", label: "我的训练", icon: Target, key: "1" },

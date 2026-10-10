@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { EditorView } from '@codemirror/view';
-import Workbench from '../src/Workbench.jsx';
+import Workbench from '../src/app/Workbench.jsx';
 import 'katex/dist/katex.min.css';
 
 const style = document.createElement('style');

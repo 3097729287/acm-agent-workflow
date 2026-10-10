@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeKatex from 'rehype-katex';
-import {normalizeMarkdown} from '../src/normalizeMarkdown.js';
+import {normalizeMarkdown} from '../src/lib/normalizeMarkdown.js';
 
 const samples=[
   '```cpp\nconst char *s="$$a\\nb$$";\n```\n',

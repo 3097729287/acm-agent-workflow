@@ -1,5 +1,5 @@
 import { matches } from "./model.js";
-import { compareContestNewest } from "./practiceMetadata.js";
+import { compareContestNewest } from "@/lib/practiceMetadata.js";
 
 export const QUEUES = [
   {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Award, BookOpen, CalendarDays, Check, ChevronRight, ExternalLink, Flag, Github, LoaderCircle, RefreshCw, Search, Target, TrendingUp, Trophy, UserRound } from 'lucide-react';
-import { compareContestNewest, contestTime, difficultyBand } from './practiceMetadata.js';
+import { compareContestNewest, contestTime, difficultyBand } from '@/lib/practiceMetadata.js';
 import './ProgressPanels.css';
 
 const PLATFORMS = [

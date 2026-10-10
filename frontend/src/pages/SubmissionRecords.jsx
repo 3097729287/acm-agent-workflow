@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight, Code2, Flag, Search } from 'lucide-react';
-import { verdictLabel, verdictTone } from './workspaceModel.js';
+import { verdictLabel, verdictTone } from '@/models/workspaceModel.js';
 
 const dateText = value => value ? new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 export default function SubmissionRecords({ submissions = [], total = submissions.length, hasMore = false, loading = false, onLoadMore, rows, onSelect }) {

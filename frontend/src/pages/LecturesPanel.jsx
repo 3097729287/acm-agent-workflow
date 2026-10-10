@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { ArrowLeft, ArrowRight, BookOpen, LoaderCircle, Search } from 'lucide-react';
-import { normalizeMarkdown } from './normalizeMarkdown.js';
+import { normalizeMarkdown } from '@/lib/normalizeMarkdown.js';
 import './LecturesPanel.css';
 
 function LessonTitle({ children }) {
