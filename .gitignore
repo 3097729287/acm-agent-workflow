@@ -22,6 +22,3 @@ compiler/
 *.zip
 *.sqlite*
 !data/library.sqlite3
-legacy/**/_work/
-legacy/**/TimuZhuangtai.log
-legacy/**/status_gui.config.json

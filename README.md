@@ -41,7 +41,6 @@ server/leaderboard/ Cloudflare Worker + D1 共享排行服务
 scripts/           内容导入、检查与构建
 packaging/         Windows 安装程序
 docs/              使用、架构、开发与迁移说明
-legacy/            原流程工具与旧界面，保留历史且不参与当前构建
 ```
 
 前后端通过 `/api` 通信。后端不要求界面文件即可启动；开发时 Vite 代理 API，桌面版由宿主组合已构建的界面与本机服务。
@@ -76,4 +75,4 @@ npm run test:compilers
 
 [排行榜部署](server/leaderboard/README.md) · [贡献说明](CONTRIBUTING.md) · [MIT](LICENSE) · [第三方许可](THIRDPARTY.md)
 
-GitHub 仓库地址保留 `acm-agent-workflow`，项目的主产品和公开介绍已转为 TB。原题解流程的文档与工具见 `legacy/workflow/`。
+GitHub 仓库地址保留 `acm-agent-workflow`，项目的主产品和公开介绍已转为 TB。
