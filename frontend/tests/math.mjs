@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {unified} from 'unified';
@@ -24,13 +24,11 @@ assert.equal(normalizeMarkdown('$$x\ny$$'),'$$\nx\ny\n$$');
 assert.equal(normalizeMarkdown('$$\nx\ny\n$$'),'$$\nx\ny\n$$');
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
-const library=path.resolve(directory,'../../data/library.sqlite3');
-const python=process.env.TB_PYTHON||'python';
-const source=`import sqlite3,json\nfrom pathlib import Path\nwith sqlite3.connect(Path(${JSON.stringify(library)}).as_uri()+'?mode=ro',uri=True) as db:\n items=[dict(id=i,markdown=m) for i,m in db.execute('select problem_id,markdown from solutions')]\n items += [dict(id=i,markdown=json.loads(c)['markdown']) for i,c in db.execute('select id,content from lectures')]\n print(json.dumps({'solutions':items},ensure_ascii=True))`;
-const run=spawnSync(python,['-B','-c',source],{encoding:'utf8',maxBuffer:64*1024*1024});
-assert.equal(run.status,0,run.stderr);
-const data=JSON.parse(run.stdout);
-assert.ok(data.solutions.length>=985,'Inspect the actual distributed SQLite content');
+const root=path.resolve(directory,'../..');
+const solutions=JSON.parse(readFileSync(path.join(root,'data/library/solutions.json'),'utf8'));
+const lectures=JSON.parse(readFileSync(path.join(root,'data/library/lectures.json'),'utf8'));
+const data={solutions:solutions.map(s=>({id:s.problem_id,markdown:s.markdown})).concat(lectures.map(l=>({id:l.content.id,markdown:l.content.markdown})))};
+assert.ok(data.solutions.length>=985,'Inspect the distributed library content');
 const pipeline=unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkRehype).use(rehypeKatex,{strict:false});
 let formulas=0,changed=0;const errors=[];
 for(const solution of data.solutions){
