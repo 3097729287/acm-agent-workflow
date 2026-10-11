@@ -53,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         try:
             self.local_request()
-            if urlsplit(self.path).path == '/api/browser/exchange':
+            if urlsplit(self.path).path in ('/api/browser/exchange', '/api/browser/register', '/api/browser/queue'):
                 from browser_bridge import EXTENSION_ORIGIN
                 if self.headers.get('Origin') != EXTENSION_ORIGIN:
                     raise APIError(403, '请求来源不匹配')
@@ -317,13 +317,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/browser/setup' and not writing:
             self.send_json(200, {'extensionPath': str(getattr(self.server, 'browser_extension_path', ''))})
             return
-        if path != '/api/browser/exchange' or not writing:
+        if path not in ('/api/browser/exchange', '/api/browser/register', '/api/browser/queue') or not writing:
             raise APIError(404, '没有找到这个接口')
         # Separate per-job capability: the browser never receives the app token.
         origin = self.headers.get('Origin')
         if origin not in (None, EXTENSION_ORIGIN) or self.headers.get('X-TB-Browser-Client') != EXTENSION_ID:
             self.close_connection = True
             raise APIError(403, '只接受 TB 浏览器连接扩展')
+        if path != '/api/browser/exchange' and origin != EXTENSION_ORIGIN:
+            self.close_connection = True
+            raise APIError(403, '后台连接必须来自 TB 扩展')
         self._browser_origin = origin
         bridge = getattr(self.server, 'browser_bridge', None)
         if bridge is None:
@@ -342,7 +345,13 @@ class Handler(BaseHTTPRequestHandler):
             raise APIError(400, 'JSON 格式无效')
         if not isinstance(body, dict):
             raise APIError(400, '浏览器请求格式无效')
-        self.send_json(200, bridge.exchange(body, self.headers.get('X-TB-Browser', '')))
+        if path == '/api/browser/register':
+            value = bridge.register_browser(body)
+        elif path == '/api/browser/queue':
+            value = bridge.browser_queue(body, self.headers.get('X-TB-Browser', ''))
+        else:
+            value = bridge.exchange(body, self.headers.get('X-TB-Browser', ''))
+        self.send_json(200, value)
 
     def static(self, path):
         root = self.server.dist_dir

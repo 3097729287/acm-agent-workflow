@@ -22,8 +22,8 @@ function installNowcoderReceipts(ctx, report) {
   // The current terminal sends judging requests to the production editor API.
   // These are the two verified production origins, not arbitrary subdomains.
   const allowed = url => url && ['https://ac.nowcoder.com', 'https://victorinox.nowcoder.com'].includes(url.origin);
-  const submitPaths = new Set(['/submit_cd', '/api/service/judge/submit']);
-  const statusPaths = new Set(['/status', '/api/service/judge/submit-status']);
+  const submitPaths = new Set(['/submit_cd', '/nccommon/submit_cd', '/api/service/judge/submit']);
+  const statusPaths = new Set(['/status', '/nccommon/status', '/api/service/judge/submit-status']);
   const id = value => /^\d+$/.test(String(value ?? '')) && BigInt(value) > 0n ? String(value) : null;
   const requestInfo = (url, method, body) => {
     const target = parseUrl(url), params = { ...Object.fromEntries(target?.searchParams || []), ...fields(body) };
@@ -50,7 +50,7 @@ function installNowcoderReceipts(ctx, report) {
       if (pending[key] != null && data[key] != null && String(data[key]) !== String(pending[key])) return null;
     }
     if (pending.owner && window.globalInfo?.ownerId != null && String(window.globalInfo.ownerId) !== pending.owner) return null;
-    if (data.error || !Number.isInteger(data.status)) return null;
+    if (data.error || data.isSelfTest === true || data.isSelfTest === 1 || !Number.isInteger(data.status)) return null;
     if (data.status >= 0 && data.status <= 2) return null;
     const descriptions = { '编译错误': 'CE', '答案错误': 'WA', '运行超时': 'TLE', '超时': 'TLE', '内存超限': 'MLE', '运行错误': 'RE', '输出超限': 'OLE' };
     const failure = descriptions[String(data.desc || '').trim()] || normal(data.desc);
@@ -66,7 +66,9 @@ function installNowcoderReceipts(ctx, report) {
       return;
     }
     if (value.code !== 0 || value.error) return;
-    const data = value.data;
+    // Legacy /nccommon endpoints return submissionId/status at the top level.
+    // Both envelopes are used by the site's own current codeSubmit module.
+    const data = value.data ?? value;
     if (request.kind === 'submit') {
       const submissionId = id(typeof data === 'object' ? data?.submissionId ?? data?.id : data);
       if (!submissionId) return;
@@ -78,7 +80,8 @@ function installNowcoderReceipts(ctx, report) {
       for (const key of ['userId', 'appId', 'tagId', 'subTagId', 'token']) {
         if (request.params[key] != null) query[key] = request.params[key];
       }
-      state.statusUrl = new URL((modern ? '/api/service/judge/submit-status' : '/status') + '?' + new URLSearchParams(query), request.target.origin).href;
+      const statusPath = modern ? '/api/service/judge/submit-status' : request.target.pathname.startsWith('/nccommon/') ? '/nccommon/status' : '/status';
+      state.statusUrl = new URL(statusPath + '?' + new URLSearchParams(query), request.target.origin).href;
       state.attempted = true;
       // 受理时刻随 judging 消息一起发出：宿主据此持久化 pending，并用它（而非
       // 收到回执的时间）记 submitted_at。不额外多发消息，保持既有消息条数契约。
@@ -107,6 +110,34 @@ function installNowcoderReceipts(ctx, report) {
     if (verdict) notify({ status: 'finished', submissionId: state.pending.submissionId, verdict, message: '牛客确认本次提交 #' + state.pending.submissionId + '：' + verdict });
   };
   const originalFetch = window.fetch;
+  state.hasLegacyApi = () => window.pageInfo?.isNewJudgeEditor === false && String(window.pageInfo?.codeJudgeType) === '0';
+  state.submitLegacy = async (compiler, checkpoint) => {
+    const info = window.pageInfo, original = parseUrl(ctx.originalUrl);
+    if (!state.hasLegacyApi() || location.pathname !== original?.pathname || String(info.contestId) !== original.pathname.split('/')[3] || !id(info.questionId)) throw new Error('牛客题目信息尚未就绪');
+    if (!id(window.globalInfo?.ownerId)) return notify({status:'needs_login', attempted:false, message:'请先在浏览器登录牛客，再回 TB 提交。'});
+    // Language 2 is the C++ compiler in the verified production legacy config.
+    // Select/validate its displayed compiler first, while sending code directly.
+    const body = {questionId:info.questionId, tagId:info.tagId, subTagId:info.subTagId,
+      doneQuestionId:info.doneQuestionId, content:ctx.code, language:'2', languageName:compiler.label};
+    const token = document.cookie.split(';').map(p=>p.trim()).find(p=>p.startsWith('csrf_token='))?.slice(11);
+    const target = new URL('/nccommon/submit_cd', location.origin);
+    if (token) target.searchParams.set('token', decodeURIComponent(token));
+    state.armed = true; state.pending = null; state.receipt = null;
+    await checkpoint({status:'submitted', attempted:true, compiler:compiler.label, message:'正在调用牛客提交接口，等待原站受理。'});
+    const request = requestInfo(target.href, 'POST', new URLSearchParams(body));
+    if (!request) throw new Error('牛客提交参数与本题不匹配');
+    try {
+      const response = await originalFetch.call(window, target.href, {method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},
+        body:new URLSearchParams(body), signal:AbortSignal.timeout(30000)});
+      const value = await response.json();
+      if (value.code === 999) return notify({status:'needs_login',attempted:false,message:'牛客登录已失效，请在浏览器登录后重试。'});
+      observe(request, value);
+      if (!state.receipt) notify({status:'unconfirmed',message:'牛客暂未返回可识别的受理编号，请核对原站提交记录。'});
+    } catch {
+      notify({status:'unconfirmed',message:'牛客提交请求的响应中断，请先核对原站记录，避免重复提交。'});
+    }
+  };
   // Called by the desktop watcher, so receipt collection does not depend on
   // timers or visibility of the site's background console.
   state.poll = async () => {

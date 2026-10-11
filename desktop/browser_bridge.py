@@ -14,8 +14,8 @@ from training import ServiceError
 
 EXTENSION_ID = 'blgkmkjbdekeoenepgnajpeafofccbjm'
 EXTENSION_ORIGIN = 'chrome-extension://' + EXTENSION_ID
-TERMINAL = {'finished', 'error', 'closed', 'unconfirmed'}
-STATES = TERMINAL | {'loading', 'needs_browser', 'needs_login', 'needs_verification', 'ready', 'submitted', 'judging'}
+TERMINAL = {'finished', 'error', 'closed'}
+STATES = TERMINAL | {'loading', 'needs_browser', 'needs_login', 'needs_verification', 'ready', 'submitted', 'judging', 'unconfirmed'}
 VERDICTS = {'AC', 'WA', 'TLE', 'MLE', 'RE', 'CE', 'OLE'}
 
 
@@ -25,7 +25,38 @@ class BrowserBridge:
         self.guard, self.on_receipt, self.on_pending = guard, on_receipt, on_pending
         self.opener, self.clock = opener or webbrowser.open, clock or time.monotonic
         self.sessions = {}
+        self.clients = {}
         self.lock = threading.RLock()
+
+    def register_browser(self, body):
+        # The HTTP layer requires the bundled extension's exact browser origin.
+        # This capability only exposes jobs already created by a TB submit click.
+        client = body.get('clientId')
+        if not isinstance(client, str) or len(client) != 36:
+            raise ServiceError(400, '浏览器连接标识无效')
+        try:
+            uuid.UUID(client)
+        except ValueError:
+            raise ServiceError(400, '浏览器连接标识无效')
+        with self.lock:
+            self.clients.setdefault(client, secrets.token_urlsafe(32))
+            return {'key': self.clients[client]}
+
+    def browser_queue(self, body, capability):
+        client = body.get('clientId')
+        with self.lock:
+            expected = self.clients.get(client)
+            if not expected or not secrets.compare_digest(expected, capability):
+                raise ServiceError(403, '浏览器后台连接已失效')
+            jobs = []
+            for session in self.sessions.values():
+                self._expire(session)
+                if session['status'] in TERMINAL or session.get('browserClient') not in (None, client):
+                    continue
+                # Assign once even when two browser profiles poll concurrently.
+                session['browserClient'] = client
+                jobs.append({'sessionId': session['sessionId'], 'key': session['capability']})
+            return {'jobs': jobs}
 
     def _expire(self, session):
         if session['status'] in TERMINAL:
@@ -33,14 +64,14 @@ class BrowserBridge:
         now = self.clock()
         if session.get('dispatchedAt') is not None and not session.get('submissionId') and now - session['dispatchedAt'] > 45:
             session.update(status='unconfirmed', intent=False,
-                           message='45 秒内未收到原站受理编号。请在浏览器核对提交记录后再重试；TB 不会自动重复提交。')
+                           message='暂未确认原站受理，仍在后台查询结果；请先核对原站记录，避免重复提交。')
         elif session.get('claimed') and now - session.get('lastSeen', now) > 90:
             session.update(status='unconfirmed' if session.get('dispatchedAt') is not None else 'error', intent=False,
                            message='浏览器连接已中断，请打开原站核对提交记录后再重试。')
         elif not session.get('claimed') and now - session['createdAt'] > 12:
-            session.update(status='needs_browser', message='请在已登录账号的浏览器启用 TB 浏览器连接扩展，然后刷新连接页。')
+            session.update(status='needs_browser', message='浏览器后台连接未就绪。请保持已登录的浏览器运行，并启用或重新加载 TB 浏览器连接扩展。')
         if now - session['createdAt'] > 900:
-            session.update(status='unconfirmed' if session.get('submissionId') else 'error', intent=False,
+            session.update(status='error', intent=False,
                            message='等待原站结果超时，请在浏览器核对提交记录。')
 
     def _open(self, url, code, title, intent):
@@ -53,7 +84,7 @@ class BrowserBridge:
         with self.lock:
             for item in self.sessions.values():
                 self._expire(item)
-            session = next((s for s in self.sessions.values() if s['status'] not in TERMINAL
+            session = next((s for s in self.sessions.values() if s['status'] not in TERMINAL | {'unconfirmed'}
                             and canonical_url(s['originalUrl']) == canonical_url(url)), None)
             if session and intent and (session.get('dispatchedAt') is not None or session.get('intent')):
                 raise ServiceError(409, '这道题已有提交正在处理，请先核对本次提交结果。')
@@ -75,7 +106,10 @@ class BrowserBridge:
                     session.update(status='loading', message='正在检查浏览器登录和提交页面。')
             session['navigateTo'] = session['loginUrl'] if not intent and session['status'] == 'needs_login' else session['url']
             fragment = urlencode({'session': session['sessionId'], 'key': session['capability']})
-        self.opener(self.base_url + '/browser-connect.html#' + fragment)
+        # Submitting never launches a browser or activates a browser tab.
+        # Opening the site/setup remains an explicit user action only.
+        if not intent:
+            self.opener(self.base_url + '/browser-connect.html#' + fragment)
         return self.status(session['sessionId'])
 
     def submit(self, url, code, title):

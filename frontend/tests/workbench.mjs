@@ -125,6 +125,9 @@ try {
   assert.equal(await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'official/submit').length), beforeDuplicate);
   assert.equal(await editor.isVisible(), true, 'editor stays available while official judging');
   assert.equal(await page.evaluate(() => window.acceptedTones), 0, 'samples, WA, login and pending do not play the AC sound');
+  await page.evaluate(() => { window.workbenchFixture.officialStatus = 'unconfirmed'; });
+  await page.getByText('正在核对提交', { exact: true }).waitFor();
+  await page.waitForTimeout(1200);
   await page.evaluate(() => { window.workbenchFixture.officialStatus = 'finished'; });
   await page.waitForFunction(() => document.querySelector('.wb-result-summary .wb-verdict-confirmed')?.textContent.trim() === 'AC');
   await page.waitForFunction(() => window.workbenchFixture.progress.length === 1);

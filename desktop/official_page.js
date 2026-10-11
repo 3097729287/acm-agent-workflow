@@ -62,10 +62,12 @@ const errors=[...document.querySelectorAll('span.error,.error-message,.submit-er
 if(errors.length)return {status:'error',attempted:false,message:'Codeforces 未受理代码：'+errors.join('；').slice(0,200)};
 }
 if(ctx.attempted&&ctx.baselineKnown){const baseline=new Set(ctx.baseline||[]);const receipt=receipts().find(r=>newerReceipt(r.id,baseline)&&(!ctx.submissionId||r.id===ctx.submissionId));if(receipt?.verdict)return receiptValue(receipt);}
-return hasEditor()?{status:ctx.attempted?'submitted':'ready',message:ctx.attempted?'已操作原站提交表单，尚未收到受理编号。':'浏览器已就绪，使用当前登录账号提交。'}:{status:ctx.attempted?'submitted':'loading',message:ctx.attempted?'尚未收到原站受理编号，请留意浏览器中的提示。':'正在加载浏览器中的原站提交页。'};
+return (lgReceipt?.hasSubmitApi()||hasEditor())?{status:ctx.attempted?'submitted':'ready',message:ctx.attempted?'已发送原站提交请求，正在等待受理编号。':'后台连接已就绪。'}:{status:ctx.attempted?'submitted':'loading',message:ctx.attempted?'尚未收到原站受理编号，正在后台查询。':'正在准备原站提交接口。'};
 }
 async function submit(){
 const state=inspect();if(['needs_login','needs_verification'].includes(state.status))return send(state);
+const checkpoint=value=>postMessage({tbOfficial:true,sessionId:ctx.sessionId,...value});
+if(lgReceipt?.hasSubmitApi())return lgReceipt.submitApi(checkpoint);
 if(!hasEditor())return send({status:'error',message:'没有找到原站代码编辑器，请进入本题提交页；不会点击其它表单。'});
 let task=!ctx.problem,filled=0;
 document.querySelectorAll('select').forEach(s=>{const field=(s.name||s.id||'').toLowerCase();if(/problem|task/.test(field)&&ctx.problem){const o=[...s.options].find(o=>o.value===ctx.problem);if(o){s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));task=true;}}});
@@ -73,6 +75,7 @@ if(['牛客','洛谷'].includes(ctx.platform))task=location.pathname===new URL(c
 if(!task)return send({status:'error',message:'未能准确选定本题，已停止；请在原站确认题目。'});
 const compiler=await selectOfficialCompiler(ctx.code,ctx.platform);
 if(!compiler)return send({status:'error',message:'没有找到支持当前代码的 C++17 / C++20 / C++23 编译器，请在原站确认语言后重试。'});
+if(ncReceipt?.hasLegacyApi())return ncReceipt.submitLegacy(compiler,checkpoint);
 editors().forEach(e=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,ctx.code);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));filled++;});
 document.querySelectorAll('.CodeMirror').forEach(e=>{if(e.CodeMirror){e.CodeMirror.setValue(ctx.code);filled++;}});document.querySelectorAll('.ace_editor').forEach(e=>{try{if(window.ace){window.ace.edit(e).setValue(ctx.code,-1);filled++;}}catch{}});try{window.monaco?.editor?.getModels?.().filter(m=>!m.isDisposed()&&/cpp|c\+\+/.test(m.getLanguageId?.()||'')).forEach(m=>{m.setValue(ctx.code);filled++;});}catch{}
 document.querySelectorAll('.cm-editor .cm-content').forEach(e=>{const view=e.cmView?.view;if(view?.state?.doc&&view?.dispatch){view.dispatch({changes:{from:0,to:view.state.doc.length,insert:ctx.code}});filled++;}});

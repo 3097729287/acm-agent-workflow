@@ -18,10 +18,10 @@ const { port } = await new Promise((resolve, reject) => {
 });
 const base = `http://127.0.0.1:${port}`;
 const profile = await mkdtemp(path.join(os.tmpdir(), 'tb-browser-extension-'));
-const extension = path.join(root, 'build/browser-extension');
+const extension = process.env.TB_BROWSER_EXTENSION || path.join(root, 'build/browser-extension');
 let browser;
 const posted = [], cookieChecks = [], errors = [];
-let cfSubmitted = false, acSubmitted = false, ncReject = false, luoguLoggedIn = true;
+let cfSubmitted = false, acSubmitted = false, ncReject = false, luoguLoggedIn = true, ncModern = false;
 const source = 'int main(){}';
 const headers = { 'access-control-allow-origin': 'https://ac.nowcoder.com', 'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
 const form = (platform, task = '') => `<select name="${platform === 'AtCoder' ? 'data.TaskScreenName' : 'submittedProblemIndex'}"><option value="${task}">${task}</option></select><select name="${platform === 'AtCoder' ? 'data.LanguageId' : 'programTypeId'}"><option value="2">GNU C++17</option></select><textarea id="sourceCode" name="source"></textarea><button type="submit">提交</button>`;
@@ -33,6 +33,10 @@ try {
   });
   const worker = browser.serviceWorkers()[0] || await browser.waitForEvent('serviceworker', { timeout: 15000 });
   assert.ok(worker.url().includes('blgkmkjbdekeoenepgnajpeafofccbjm'));
+  await worker.evaluate(async base => { await chrome.storage.local.set({bases:[base]}); }, base);
+  const foreground = browser.pages()[0] || await browser.newPage();
+  await foreground.goto(base + '/browser-connect.html');
+  const activeTab = await worker.evaluate(async () => (await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0].id);
   browser.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   for (const domain of ['codeforces.com', 'atcoder.jp', 'ac.nowcoder.com', 'www.luogu.com.cn']) {
     await browser.addCookies([{ name: 'fixture_login', value: 'existing-browser-session', domain, path: '/', secure: true, sameSite: 'Lax' }]);
@@ -52,7 +56,20 @@ try {
         assert.equal(JSON.parse(request.postData()).content, source);
         return json(ncReject ? { code: 1125, msg: '验证码错误' } : { code: 0, data: 3002 });
       }
-      if (url.hostname === 'www.luogu.com.cn') { assert.equal(JSON.parse(request.postData()).code, source); return json({ rid: 4002 }); }
+      if (url.hostname === 'ac.nowcoder.com' && url.pathname === '/nccommon/submit_cd') {
+        const body = new URLSearchParams(request.postData());
+        assert.equal(body.get('content'), source);
+        assert.equal(body.get('questionId'), '11604979');
+        assert.equal(body.get('doneQuestionId'), '127263');
+        assert.equal(body.get('language'), '2');
+        return json(ncReject ? {code:1125,msg:'验证码错误'} : {code:0,submissionId:3002});
+      }
+      if (url.hostname === 'www.luogu.com.cn') {
+        const body=JSON.parse(request.postData());
+        assert.equal(body.code, source); assert.equal(body.lang,12); assert.equal(body.enableO2,1);
+        assert.equal((await request.allHeaders())['x-csrf-token'],'fixture-csrf');
+        return json({ rid: 4002 });
+      }
       return route.abort();
     }
     if (url.hostname === 'codeforces.com') {
@@ -63,27 +80,25 @@ try {
       if (url.pathname.endsWith('/submissions/me')) return html(row('AtCoder', acSubmitted));
       if (url.pathname.endsWith('/submit')) return html('<form>' + form('AtCoder', 'abc100_a') + '</form><script>document.querySelector("form").onsubmit=e=>{e.preventDefault();fetch(location.pathname,{method:"POST",body:document.querySelector("textarea").value})}</script>');
     }
+    if (url.hostname === 'ac.nowcoder.com' && url.pathname === '/nccommon/status') return json({code:0,id:3002,status:5,isSelfTest:false});
     if (url.hostname === 'ac.nowcoder.com') return html(`<select name="language"><option value="2">C++（clang++18）</option></select><div class="CodeMirror">原站编辑器</div><div style="display:none"><button>保存并提交</button></div><button class="btn-submit">保存并提交</button><script>
-      window.pageInfo={contestId:'127263',questionId:'11604979'};window.globalInfo={ownerId:12345};
+      window.pageInfo={contestId:'127263',questionId:'11604979',isNewJudgeEditor:${ncModern},codeJudgeType:'0',tagId:'4',subTagId:'1',doneQuestionId:'127263'};window.globalInfo={ownerId:12345};
       const cachedFetch=window.fetch;let code='';document.querySelector('.CodeMirror').CodeMirror={setValue(value){code=value},getValue(){return code}};
       document.querySelector('.btn-submit').onclick=()=>cachedFetch('https://victorinox.nowcoder.com/api/service/judge/submit',{method:'POST',body:JSON.stringify({questionId:'11604979',content:code,submitType:1,userId:12345,appId:6,tagId:4,token:'page-only-fixture'})});
     </script>`);
     if (url.hostname === 'victorinox.nowcoder.com') return json({ code: 0, data: { status: 5 } });
     if (url.hostname === 'www.luogu.com.cn') {
+      if (url.pathname === '/_lfe/config') return json({route:{'api.problem.submit':'/fe/api/problem/submit/{pid}'},CodeLanguage:{12:{id:12,name:'C++17',canO2:true},34:{id:34,name:'C++23',canO2:true}}});
       if (url.pathname.startsWith('/record/')) return json({ data: { record: { id: 4002, problem: { pid: 'P1001' }, user: { uid: 12345 }, status: 12 } } });
       if (url.pathname.startsWith('/auth/login')) return html('<input type="password">');
-      return html(`<script id="lentille-context" type="application/json">${JSON.stringify({ user: luoguLoggedIn ? { uid: 12345 } : null })}</script><form>${form('洛谷')}</form><script>
-        document.querySelector('form').onsubmit=e=>{e.preventDefault();fetch('/fe/api/problem/submit/P1001',{method:'POST',body:JSON.stringify({code:document.querySelector('textarea').value,lang:2})})};
-      </script>`);
+      return html(`<meta name="csrf-token" content="fixture-csrf"><script id="lentille-context" type="application/json">${JSON.stringify({user:luoguLoggedIn?{uid:12345}:null,data:{problem:{pid:'P1001',acceptLanguages:[12,34]},contest:null}})}</script><p>新版提交页面尚未挂载编辑器</p>`);
     }
     return route.abort();
   });
   async function submit(key, url) {
     const result = await (await fetch(base + '/fixture/create?' + new URLSearchParams({ key, url }))).json();
-    assert.ok(result.connect, JSON.stringify(result));
-    const page = await browser.newPage();
-    await page.goto(result.connect);
-    return page;
+    assert.ok(result.sessionId, JSON.stringify(result));
+    return result;
   }
   async function state(key, status, timeout = 25000) {
     const until = Date.now() + timeout;
@@ -102,24 +117,29 @@ try {
     ['nowcoder', 'https://ac.nowcoder.com/acm/contest/127263/B'],
     ['luogu', 'https://www.luogu.com.cn/problem/P1001'],
   ]) {
-    const page = await submit(key, url);
+    await submit(key, url);
     const result = await state(key, 'finished');
     assert.equal(result.verdict, 'AC');
-    assert.equal(new URL(page.url()).protocol, 'https:');
-    assert.ok((await page.context().cookies(url)).some(cookie => cookie.name === 'fixture_login'));
+    assert.equal(await worker.evaluate(async () => (await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0].id),activeTab,'submission never activates a browser tab');
+    assert.ok((await browser.cookies(url)).some(cookie => cookie.name === 'fixture_login'));
   }
   assert.equal(posted.length, 4, 'each platform issues exactly one native submission');
   assert.ok(cookieChecks.every(Boolean), 'submissions reuse cookies already in the ordinary browser');
   assert.equal((await (await fetch(base + '/fixture/saved')).json()).length, 4, 'all four receipts reach desktop persistence callback');
+  assert.deepEqual(await (await fetch(base + '/fixture/opened')).json(), [], 'TB never launches the browser on submit');
+  ncModern = true;
+  await submit('modern', 'https://ac.nowcoder.com/acm/contest/127263/B');
+  await state('modern','finished');
   ncReject = true;
   await submit('captcha', 'https://ac.nowcoder.com/acm/contest/127263/B');
   await state('captcha', 'needs_verification');
-  assert.equal((await (await fetch(base + '/fixture/saved')).json()).length, 4);
+  assert.equal((await (await fetch(base + '/fixture/saved')).json()).length, 5);
   luoguLoggedIn = false;
-  const login = await submit('login', 'https://www.luogu.com.cn/problem/P1001');
+  await submit('login', 'https://www.luogu.com.cn/problem/P1001');
   await state('login', 'needs_login');
   const before = posted.length;
   luoguLoggedIn = true;
+  const login = browser.pages().find(page => page.url().startsWith('https://www.luogu.com.cn/problem/P1001'));
   await login.reload();
   await state('login', 'ready');
   assert.equal(posted.length, before, 'logging in does not auto-submit');
@@ -127,7 +147,8 @@ try {
   await state('login', 'finished');
   assert.equal(posted.length, before + 1);
   assert.deepEqual(errors, []);
-  console.log('Browser extension: four platforms, existing browser cookies, early cached-fetch observer, native forms, receipts, captcha, login retry and no duplicate submits passed.');
+  assert.equal(await worker.evaluate(async () => (await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0].id),activeTab);
+  console.log('Background extension: four platforms; no opened browser or active tab changes; legacy Nowcoder nccommon/top-level receipts; modern cached fetch; Luogu API without editor; original CSRF/cookies; captcha, login retry, no duplicates passed.');
 } finally {
   if (browser) await browser.close();
   server.kill();

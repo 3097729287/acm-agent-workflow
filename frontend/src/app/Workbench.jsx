@@ -22,8 +22,8 @@ const VERDICTS = {
   WA: '答案错误', TLE: '超时', MLE: '内存超限', RE: '运行错误',
   CE: '编译错误', OLE: '输出超限', ERROR: '评测不可用',
 };
-const OFFICIAL_STATES = { loading: '连接浏览器', needs_browser: '需要连接浏览器', needs_login: '请在浏览器登录', needs_verification: '请在浏览器验证', ready: '已连接，可提交', submitted: '等待原站受理', judging: '评测中', finished: '评测完成', unconfirmed: '尚未确认提交', error: '提交异常', closed: '会话已结束' };
-const OFFICIAL_TERMINAL = new Set(['finished', 'error', 'closed', 'unconfirmed']);
+const OFFICIAL_STATES = { loading: '连接原站', needs_browser: '需要连接浏览器', needs_login: '请在浏览器登录', needs_verification: '请在浏览器验证', ready: '已连接，可提交', submitted: '等待原站受理', judging: '评测中', finished: '评测完成', unconfirmed: '正在核对提交', error: '提交异常', closed: '会话已结束' };
+const OFFICIAL_TERMINAL = new Set(['finished', 'error', 'closed']);
 
 // Serialize saves across mounts as well as edits. An older request must never
 // finish after a newer draft for the same problem and overwrite it on disk.

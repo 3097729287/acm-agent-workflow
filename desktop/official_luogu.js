@@ -52,6 +52,38 @@ function installLuoguReceipts(ctx, report) {
     else if (![0, 1].includes(record.status)) notify({ status: 'error', submissionId: state.pending.id, message: '洛谷返回评测状态 ' + record.status + '，请在原站核对本次记录。' });
   };
   const originalFetch = window.fetch;
+  state.hasSubmitApi = () => pageData()?.data?.problem?.pid === problem();
+  state.submitApi = async checkpoint => {
+    const context = pageData(), targetProblem = context?.data?.problem;
+    if (!state.hasSubmitApi() || location.pathname !== new URL(ctx.originalUrl).pathname || context.data.contest) throw new Error('洛谷题目提交上下文不匹配');
+    if (!numericId(owner())) return notify({status:'needs_login',attempted:false,message:'请先在浏览器登录洛谷，再回 TB 提交。'});
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+    if (!csrf) throw new Error('洛谷页面未提供提交令牌，请刷新原站后重试');
+    const configResponse = await originalFetch.call(window, '/_lfe/config?version=0', {credentials:'same-origin',signal:AbortSignal.timeout(15000)});
+    if (!configResponse.ok) throw new Error('暂时无法读取洛谷语言配置');
+    const config = await configResponse.json();
+    if (config.route?.['api.problem.submit'] !== '/fe/api/problem/submit/{pid}') throw new Error('洛谷提交接口已变化，请更新 TB');
+    const accepted = new Set((targetProblem.acceptLanguages || []).map(String));
+    const choices = Object.values(config.CodeLanguage || {}).filter(lang=>!lang.disabled&&accepted.has(String(lang.id)))
+      .map(lang=>({lang,candidate:compilerCandidate(lang.name,ctx.code,'洛谷')})).filter(item=>item.candidate)
+      .sort((a,b)=>a.candidate.score-b.candidate.score);
+    const choice = choices[0];
+    if (!choice) throw new Error('这道洛谷题没有支持当前代码的 C++ 编译器');
+    const url = '/fe/api/problem/submit/' + problem();
+    const body = {code:ctx.code,lang:choice.lang.id,enableO2:choice.lang.canO2?1:0};
+    state.armed = true; state.receipt = null; state.pending = null;
+    const request = requestInfo(url, 'POST', JSON.stringify(body));
+    if (!request) throw new Error('洛谷提交参数与本题不匹配');
+    await checkpoint({status:'submitted',attempted:true,compiler:choice.candidate.label,message:'正在调用洛谷提交接口，等待原站受理。'});
+    try {
+      const response = await originalFetch.call(window,url,{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+      observeSubmit(request,await response.json());
+      if (!state.receipt) notify({status:'unconfirmed',message:'洛谷暂未返回可识别的受理编号，请核对原站提交记录。'});
+    } catch {
+      notify({status:'unconfirmed',message:'洛谷提交请求的响应中断，请先核对原站记录，避免重复提交。'});
+    }
+  };
   state.poll = async () => {
     if (!state.pending || state.polling || state.receipt?.status === 'finished' || typeof originalFetch !== 'function') return;
     state.polling = true;

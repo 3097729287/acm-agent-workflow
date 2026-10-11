@@ -39,13 +39,13 @@ class BrowserBridgeTests(unittest.TestCase):
         self.assertEqual(answer['action'], 'submit')
         return answer
 
-    def test_all_four_platforms_open_the_existing_browser(self):
+    def test_all_four_platforms_submit_without_opening_browser(self):
         for url in (self.url, 'https://codeforces.com/contest/123/problem/A',
                     'https://atcoder.jp/contests/abc100/tasks/abc100_a', 'https://www.luogu.com.cn/problem/P1001'):
             answer = self.bridge.submit(url, 'int main(){}', 'fixture')
             self.assertNotIn('code', answer)
             self.assertNotIn('capability', answer)
-            self.assertTrue(self.opened[-1].startswith('http://127.0.0.1:18765/browser-connect.html#'))
+            self.assertEqual(self.opened, [])
 
     def test_unknown_or_cross_session_secret_cannot_read_code(self):
         self.create()
@@ -69,7 +69,9 @@ class BrowserBridgeTests(unittest.TestCase):
             self.bridge.submit(self.url, 'new code', 'fixture')
         self.now = 46
         self.assertEqual(self.bridge.status(self.sid)['status'], 'unconfirmed')
-        self.assertEqual(self.exchange(), {'stop': True, 'status': 'unconfirmed'})
+        self.assertEqual(self.exchange()['action'], 'inspect')
+        self.exchange(event={'status': 'finished', 'submissionId': '101', 'verdict': 'AC'})
+        self.assertEqual(self.bridge.status(self.sid)['verdict'], 'AC', 'late receipts still reach TB')
 
     def test_missing_extension_is_actionable_and_reconnect_keeps_intent(self):
         self.create(); self.now = 13
@@ -91,6 +93,7 @@ class BrowserBridgeTests(unittest.TestCase):
         self.dispatch(); self.now = 46
         self.assertEqual(self.bridge.status(self.sid)['status'], 'unconfirmed')
         opened = self.bridge.open(self.url, 'int main(){}', 'fixture')
+        self.assertTrue(self.opened[-1].startswith('http://127.0.0.1:18765/browser-connect.html#'))
         self.sid = opened['sessionId']; self.secret = self.bridge.sessions[self.sid]['capability']
         self.exchange(claim=True); self.exchange(event={'status': 'ready'})
         self.assertEqual(self.exchange()['action'], 'inspect')
@@ -122,6 +125,19 @@ class BrowserBridgeTests(unittest.TestCase):
         with self.assertRaises(ServiceError):
             self.exchange(claim=True)
 
+    def test_background_queue_is_scoped_and_assigned_once(self):
+        import uuid
+        first, second = str(uuid.uuid4()), str(uuid.uuid4())
+        key = self.bridge.register_browser({'clientId': first})['key']
+        other_key = self.bridge.register_browser({'clientId': second})['key']
+        self.create()
+        with self.assertRaises(ServiceError):
+            self.bridge.browser_queue({'clientId': first}, other_key)
+        queued = self.bridge.browser_queue({'clientId': first}, key)['jobs']
+        self.assertEqual(queued, [{'sessionId': self.sid, 'key': self.secret}])
+        self.assertEqual(self.bridge.browser_queue({'clientId': second}, other_key)['jobs'], [])
+        self.assertNotIn('code', queued[0])
+
     def test_api_extension_origin_has_no_general_app_write_access(self):
         from backend import Handler
         from http.server import ThreadingHTTPServer
@@ -145,6 +161,17 @@ class BrowserBridgeTests(unittest.TestCase):
                 with self.assertRaises(HTTPError) as raised:
                     urlopen(Request(base + path, body, headers | changed), timeout=5)
                 self.assertEqual(raised.exception.code, 403)
+            import uuid
+            registration = json.dumps({'clientId': str(uuid.uuid4())}).encode()
+            for origin in ('https://ac.nowcoder.com', None):
+                bad = {k: v for k, v in headers.items() if k != 'Origin'}
+                if origin:
+                    bad['Origin'] = origin
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(Request(base + '/api/browser/register', registration, bad), timeout=5)
+                self.assertEqual(raised.exception.code, 403)
+            with urlopen(Request(base + '/api/browser/register', registration, headers), timeout=5) as response:
+                self.assertTrue(json.load(response)['key'])
         finally:
             server.shutdown(); server.server_close()
 

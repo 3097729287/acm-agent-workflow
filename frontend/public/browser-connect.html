@@ -3,7 +3,7 @@
 <title>连接 TB 与浏览器</title>
 <style>body{font:17px/1.8 system-ui,sans-serif;background:#14151c;color:#eee;margin:64px auto;padding:0 24px;max-width:700px}h1{font-size:28px}li{margin:14px 0}code{background:#292735;padding:4px 8px;border-radius:5px;overflow-wrap:anywhere}button{background:#a79be9;color:#171322;border:0;border-radius:6px;padding:9px 18px;cursor:pointer}small{color:#bcb9cb}</style>
 <h1>使用浏览器账号提交</h1><p id="connection-status">正在连接 TB 浏览器扩展…</p>
-<p>Codeforces、AtCoder、牛客和洛谷直接使用此浏览器的登录状态。首次使用需要启用一次 TB 浏览器连接。</p>
+<p>Codeforces、AtCoder、牛客和洛谷直接使用此浏览器的登录状态。启用一次 TB 浏览器连接后，日常提交和结果查询都在后台完成，保持此浏览器运行即可。</p>
 <ol><li>在地址栏打开 <code>edge://extensions</code>（Chrome 使用 <code>chrome://extensions</code>），开启“开发人员模式”。</li><li>点击“加载解压缩的扩展”，选择：<p><code id="folder">程序目录中的 browser-extension 文件夹</code></p><button id="copy">复制目录</button></li><li>回到此页面，<button id="retry">重新连接</button>。</li></ol>
-<small>请使用你已登录竞赛平台的浏览器配置文件。扩展只在你从 TB 发起提交时工作，不读取或导出 Cookie、密码。</small>
+<small>请使用你已登录竞赛平台的浏览器配置文件。升级扩展文件后，在扩展管理页点击“重新加载”。扩展不读取或导出账号 Cookie、密码，提交令牌留在原站。</small>
 <script src="/browser-connect.js"></script></html>
