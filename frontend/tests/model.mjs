@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
 import {matches,organizeCategories,categoryStats} from '../src/models/model.js';
+import {briefSolution} from '../src/lib/practiceMetadata.js';
+const easy='### 题意\n\n统计总和。\n\n### 思路\n\n累加每个数。\n\n#### 正确性\n\n完整证明保留。\n\n### 参考代码\n\n```cpp\nint main(){}\n// ### not a heading\n```\n\n### 复杂度\n\n线性。';
+assert.match(briefSolution(easy,800),/累加每个数/);
+assert.match(briefSolution(easy,800),/int main\(\)\{\}\n\/\/ ### not a heading/);
+assert.equal(briefSolution(easy,800).includes('完整证明'),false);
+assert.equal(briefSolution(easy,2000),null);
+assert.equal(briefSolution(easy,null),null);
+assert.equal(briefSolution('### 思路\n\n无完整代码',800),null);
 const row={contest:'周赛 164',problem:'C',title:'练习',knowledge:'LCA',tags:['LCA'],difficulty:1700,status:'待重写',platform:'牛客'};
 assert.equal(matches(row,'周赛 164 C 1700 待重写'),true);
 assert.equal(matches(row,'周赛 123'),false);

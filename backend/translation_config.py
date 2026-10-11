@@ -12,7 +12,8 @@ from urllib.parse import urlsplit, urlunsplit
 from integrations import atomic,load
 from training import ServiceError
 
-PROVIDERS={'deepseek':{'name':'DeepSeek','baseUrl':'https://api.deepseek.com','keyEnv':'DEEPSEEK_API_KEY','defaultModel':'deepseek-chat'},'huoshan':{'name':'火山方舟 Agent Plan','baseUrl':'https://ark.cn-beijing.volces.com/api/plan/v3','keyEnv':'HUOSHAN_API_KEY','defaultModel':''},'custom':{'name':'自定义 OpenAI 兼容 API','baseUrl':'','keyEnv':'TB_TRANSLATION_API_KEY','defaultModel':''}}
+DEFAULT_DEEPSEEK_MODEL='deepseek-flash'
+PROVIDERS={'deepseek':{'name':'DeepSeek','baseUrl':'https://api.deepseek.com','keyEnv':'DEEPSEEK_API_KEY','defaultModel':DEFAULT_DEEPSEEK_MODEL},'huoshan':{'name':'火山方舟 Agent Plan','baseUrl':'https://ark.cn-beijing.volces.com/api/plan/v3','keyEnv':'HUOSHAN_API_KEY','defaultModel':''},'custom':{'name':'自定义 OpenAI 兼容 API','baseUrl':'','keyEnv':'TB_TRANSLATION_API_KEY','defaultModel':''}}
 
 
 class _Blob(ctypes.Structure):
@@ -101,7 +102,12 @@ class ProviderSettings:
     def __init__(self,state_dir):self.path=Path(state_dir)/'translation-settings.json';self.lock=threading.RLock();self.error=''
     def _read(self):
         value=load(self.path,{})
-        return value if isinstance(value,dict) and value.get('provider') else existing_provider() or {'provider':'deepseek'}
+        value=value if isinstance(value,dict) and value.get('provider') else existing_provider() or {'provider':'deepseek'}
+        # These aliases were retired by the official service. Custom gateways
+        # keep the model ID chosen by their owner; never rewrite another API.
+        if value.get('provider')=='deepseek' and value.get('model') in ('deepseek-chat','deepseek-reasoner'):
+            value={**value,'model':DEFAULT_DEEPSEEK_MODEL}
+        return value
     @staticmethod
     def _base(value,spec):
         return value.get('baseUrl','') if value.get('provider')=='custom' else spec['baseUrl']

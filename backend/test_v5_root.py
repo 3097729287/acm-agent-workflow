@@ -3,16 +3,20 @@ import datetime as dt
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from persistence import load_document
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
 from unittest.mock import patch
-import sys
+
 _test_common = Path(__file__).resolve().parent / "common"
 sys.path.insert(0,str(_test_common if _test_common.is_dir() else Path(__file__).resolve().parent.parent))
+_extra_desktop = Path(__file__).resolve().parent.parent / "desktop"
+if str(_extra_desktop) not in sys.path:
+    sys.path.insert(0, str(_extra_desktop))
+from persistence import load_document
 import integrations as I
 import public_platforms as P
 from official_bridge import page_script

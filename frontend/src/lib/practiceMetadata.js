@@ -6,6 +6,32 @@ export function difficultyBand(value) {
   return rating < 1200 ? "intro" : rating < 1500 ? "basic" : rating < 1800 ? "intermediate" : rating < 2100 ? "challenge" : "advanced";
 }
 
+export function briefSolution(markdown, difficulty) {
+  if (typeof difficulty !== 'number' || difficulty > 1000 || difficulty < 0) return null;
+  const lines = String(markdown || '').split('\n'), headings = [];
+  let fence = null;
+  lines.forEach((line, index) => {
+    const code = line.match(/^\s*(`{3,}|~{3,})/);
+    if (code) { fence = fence === code[1][0] ? null : fence || code[1][0]; return; }
+    const heading = !fence && line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) headings.push({ index, level: heading[1].length, title: heading[2] });
+  });
+  const section = expression => {
+    const heading = headings.find(item => expression.test(item.title));
+    if (!heading) return '';
+    const end = headings.find(item => item.index > heading.index && item.level <= heading.level)?.index ?? lines.length;
+    return lines.slice(heading.index + 1, end).join('\n').trim();
+  };
+  const paragraph = text => {
+    const first = text.split(/\n\s*\n/)[0];
+    return (first.match(/(?<!\\)\$/g) || []).length % 2 ? '' : first;
+  };
+  const intent = paragraph(section(/^题意/)), idea = paragraph(section(/^(?:思路|做法|算法)/));
+  const code = section(/(?:参考代码|代码实现|^代码)/).match(/(```(?:cpp|c\+\+|cxx)[^\n]*\n[\s\S]*?\n```)/i)?.[1];
+  if (!intent || !idea || !code || intent.length + idea.length > 1200) return null;
+  return `### 题意\n\n${intent}\n\n### 思路提要\n\n${idea}\n\n### 参考代码\n\n${code}`;
+}
+
 export function contestTime(row) {
   for (const value of [row?.contestDate, row?.startedAt, row?.endedAt]) {
     if (typeof value !== "string" || !value.trim()) continue;

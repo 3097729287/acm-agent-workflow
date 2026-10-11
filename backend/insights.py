@@ -67,12 +67,14 @@ def build_insights(rows, submissions, history, workspace, hub, now):
         key = canonical_url(row.get("url"))
         aliases[row["id"]] = by_url[key]["id"] if key else row["id"]
     records = [record for record in submissions if record.get("mode") == "submit" and record.get("finished_at")]
-    personal = set()
+    personal = set()      # 2026-10-10 起不再使用：本地通过不算 AC，见下方说明
     samples = set()
     independent = {}
     first_accepted = {}
     per_day = defaultdict(lambda: {"submissions": 0, "accepted": set(), "officialAccepted": set()})
     grouped = defaultdict(list)
+    # 2026-10-10 口径：只有官方 AC 加经验（四档），取消本地首通 100 / 复习 20 / 模赛 10。
+    from progression import official_first_xp
     xp = 0
     credited_codes = set()
     viewed_codes = set()
@@ -86,30 +88,38 @@ def build_insights(rows, submissions, history, workspace, hub, now):
             per_day[day]["submissions"] += 1
         if record.get("verdict") == "SAMPLE_PASS":
             samples.add(identity)
-        if record.get("verdict") != "AC" or record.get("scope") != "local":
+        # 旧 local AC 归入样例通过展示口径（不是 AC）
+        if record.get("verdict") == "AC" and record.get("scope") == "local":
+            samples.add(identity)
+            code_key = (identity, hashlib.sha256(record.get("code", "").encode()).hexdigest())
+            if record.get("solution_seen"):
+                viewed_codes.add(code_key)
+            credited_codes.add(code_key)
+        if record.get("verdict") != "AC" or record.get("scope") != "official":
             continue
         code_key = (identity, hashlib.sha256(record.get("code", "").encode()).hexdigest())
         if record.get("solution_seen"):
             viewed_codes.add(code_key)
         timestamp = dt.datetime.fromisoformat(record["submitted_at"].replace("Z", "+00:00"))
-        if identity not in personal:
-            xp += 100
+        if identity not in first_accepted:
             first_accepted[identity] = record.get("submitted_at")
             review_cursor[identity] = timestamp
             if day:
                 per_day[day]["accepted"].add(identity)
-        elif not record.get("solution_seen") and code_key not in viewed_codes and code_key not in credited_codes and (timestamp - review_cursor[identity]).total_seconds() >= 86400 and reviews[identity] < 5:
-            xp += 20
-            reviews[identity] += 1
-            review_cursor[identity] = timestamp
+            difficulty = library.get(identity, {}).get("difficulty")
+            xp += official_first_xp(difficulty)
         credited_codes.add(code_key)
-        personal.add(identity)
         difficulty = library.get(identity, {}).get("difficulty")
         if not record.get("solution_seen") and code_key not in viewed_codes and isinstance(difficulty, (int, float)) and not isinstance(difficulty, bool):
             independent.setdefault(identity, (difficulty, record.get("submitted_at")))
 
     official = set()
     official_dates = {}
+    for record in records:
+        if record.get('mode')=='submit' and record.get('verdict')=='AC' and record.get('scope')=='official' and record.get('finished_at'):
+            identity=aliases.get(record['problem_id'],record['problem_id']);official.add(identity)
+            day=_date(record.get('submitted_at'))
+            if day:official_dates[identity]=min(day,official_dates.get(identity,day))
     platforms = []
     for account in hub.get("accounts", []):
         platforms.append({key: account.get(key) for key in ("platform", "rating", "maxRating", "status")})
@@ -129,11 +139,7 @@ def build_insights(rows, submissions, history, workspace, hub, now):
     active = {aliases.get(row["id"], row["id"]): row for row in workspace.get("training", [])}
     reviewed = {aliases.get(row["id"], row["id"]) for row in history if row.get("review_count", 0)}
     completed_contests = qualified_contests(workspace.get("contests", []), records)
-    # A contest reward requires a newly accepted original problem in that session.
-    # Replaying a set, or handing in an empty set, cannot generate more experience.
-    credited_contests = {record.get("contest_id") for record in records if record.get("verdict") == "AC" and record.get("scope") == "local"
-                         and first_accepted.get(aliases.get(record["problem_id"], record["problem_id"])) == record.get("submitted_at")}
-    xp += 10 * sum(contest["id"] in credited_contests for contest in completed_contests)
+    # 2026-10-10：取消模赛本地 AC +10 XP；完成模拟赛只保留成就，不发经验。
     level = xp // 500 + 1
     names = ["初次启程", "持续练习", "稳步积累", "独立攻坚", "长期精进"]
     growth = {"xp": xp, "totalXp": xp, "level": level, "levelName": names[min(level - 1, len(names) - 1)], "currentLevelXp": xp % 500, "nextLevelXp": 500, "nextMilestone": f"再积累 {500 - xp % 500} XP 升至 {level + 1} 级"}
@@ -162,9 +168,9 @@ def build_insights(rows, submissions, history, workspace, hub, now):
     knowledge = []
     for name, ids in tag_ids.items():
         participated = ids & active.keys()
-        local = ids & personal
+        local = ids & personal          # 旧本地 AC，仅展示；不再并入通过口径
         public = ids & official
-        accepted = local | public
+        accepted = public               # 2026-10-10：通过 = 官方 AC
         attempts = sum(len(grouped[identity]) for identity in ids)
         failures = sum(record.get("verdict") in FAILURES for identity in ids for record in grouped[identity])
         due_ids = [identity for identity in participated if active[identity].get("queue")]
@@ -172,16 +178,16 @@ def build_insights(rows, submissions, history, workspace, hub, now):
         confidence = "none" if not attempts and not public else "low" if evidence < 3 else "medium" if evidence < 10 else "high"
         mastery = round(100 * len(accepted) / len(ids)) if attempts or public else None
         priority = min(100, len(due_ids) * 20 + (20 if participated and not accepted else 0) + min(10, failures))
-        suggestions = sorted(due_ids) + sorted(ids - personal - official - set(due_ids), key=lambda identity: (library.get(identity, {}).get("difficulty") is None, library.get(identity, {}).get("difficulty") or 99999, identity))
+        suggestions = sorted(due_ids) + sorted(ids - official - set(due_ids), key=lambda identity: (library.get(identity, {}).get("difficulty") is None, library.get(identity, {}).get("difficulty") or 99999, identity))
         reason = f"有 {len(due_ids)} 道待办" if due_ids else "已有尝试，可继续独立验证" if participated and not accepted else "继续扩大通过覆盖" if accepted else "还没有个人提交证据"
-        knowledge.append({"name": name, "tags": [name], "available": len(ids), "participated": len(participated), "accepted": len(accepted), "officialAccepted": len(public), "localAccepted": len(local), "attempts": attempts, "failures": failures, "due": len(due_ids), "reviewed": len(ids & reviewed), "mastery": mastery, "confidence": confidence, "label": "通过覆盖率" if mastery is not None else "暂无证据", "priority": priority, "reason": reason, "suggestedIds": suggestions[:6]})
+        knowledge.append({"name": name, "tags": [name], "available": len(ids), "participated": len(participated), "accepted": len(accepted), "officialAccepted": len(public), "localAccepted": len(local), "attempts": attempts, "failures": failures, "due": len(due_ids), "reviewed": len(ids & reviewed), "mastery": mastery, "confidence": confidence, "label": "官方通过覆盖率" if mastery is not None else "暂无证据", "priority": priority, "reason": reason, "suggestedIds": suggestions[:6]})
     knowledge.sort(key=lambda item: (-item["priority"], item["name"]))
     recommendations = [{"name": item["name"], "reason": item["reason"], "priority": item["priority"], "ids": item["suggestedIds"]} for item in knowledge if item["suggestedIds"]][:6]
 
     first_dates = sorted(value for value in first_accepted.values() if value)
     achievements = []
-    for target, name in ((1, "首次本地通过"), (10, "十题积累"), (50, "五十题积累"), (100, "百题积累")):
-        achievements.append({"id": f"local-{target}", "name": name, "description": f"通过 {target} 道不同题目的本地审核评测；样例通过不计入", "unlocked": len(personal) >= target, "unlockedAt": first_dates[target - 1] if len(first_dates) >= target else None, "progress": min(target, len(personal)), "target": target})
+    for target, name in ((1, "首次官方 AC"), (10, "十题积累"), (50, "五十题积累"), (100, "百题积累")):
+        achievements.append({"id": f"official-{target}", "name": name, "description": f"官方 AC {target} 道不同题目；样例通过不计入", "unlocked": len(first_accepted) >= target, "unlockedAt": first_dates[target - 1] if len(first_dates) >= target else None, "progress": min(target, len(first_accepted)), "target": target})
     achievements.append({"id": "contest-1", "name": "完成模拟赛", "description": "完成一场至少训练一分钟并实际提交的计时模拟赛", "unlocked": bool(completed_contests), "unlockedAt": min((item.get("finishedAt") for item in completed_contests if item.get("finishedAt")), default=None), "progress": min(1, len(completed_contests)), "target": 1})
     evidence_count = len(independent)
     enough = evidence_count >= 5
@@ -197,10 +203,10 @@ def build_insights(rows, submissions, history, workspace, hub, now):
                 trend[-1] = point
             else:
                 trend.append(point)
-    assessment = {"rating": rating, "band": "insufficient" if not enough else "low" if evidence_count < 10 else "medium" if evidence_count < 30 else "high", "label": "训练难度估算" if enough else "独立通过证据不足", "confidence": "none" if not enough else "low" if evidence_count < 10 else "medium" if evidence_count < 30 else "high", "evidenceCount": evidence_count, "explanation": "取至少五道独立通过本地审核题目的难度中位数，仅描述已验证训练范围，不是官方等级分；查看题解后提交、运行和样例通过不计入。", "platforms": platforms, "trend": trend[-365:]}
+    assessment = {"rating": rating, "band": "insufficient" if not enough else "low" if evidence_count < 10 else "medium" if evidence_count < 30 else "high", "label": "训练难度估算" if enough else "独立通过证据不足", "confidence": "none" if not enough else "low" if evidence_count < 10 else "medium" if evidence_count < 30 else "high", "evidenceCount": evidence_count, "explanation": "取至少五道独立官方 AC 题目的难度中位数，仅描述已验证训练范围，不是官方等级分；查看题解后的提交、运行和样例通过不计入。", "platforms": platforms, "trend": trend[-365:]}
     recommendations, level, basis = recommend_problems(library, active, independent, personal, official, hub)
     assessment.update(recommendationLevel=level, recommendationBasis=basis)
-    summary = {"active": len(active), "accepted": sum(bool(row.get("accepted")) for row in active.values()), "submissions": len(records), "activeDays": len(days), "streak": streak, "longestStreak": longest, "completedContests": len(completed_contests), "officialSolved": len(official), "localAccepted": len(personal), "samplePassed": len(samples - personal)}
+    summary = {"active": len(active), "accepted": sum(bool(row.get("accepted")) for row in active.values()), "submissions": len(records), "activeDays": len(days), "streak": streak, "longestStreak": longest, "completedContests": len(completed_contests), "officialSolved": len(official), "localAccepted": len(personal), "samplePassed": len(samples)}
     return {"summary": summary, "growth": growth, "activity": activity, "knowledge": knowledge, "recommendations": recommendations, "achievements": achievements, "assessment": assessment}
 
 
@@ -211,7 +217,7 @@ def recommend_problems(library, active, independent, personal, official, hub):
     public = [library[identity]['difficulty'] for identity in official if identity in library and isinstance(library[identity].get('difficulty'), (int, float))]
     if len(values) >= 3:
         level = round(statistics.median(values) / 50) * 50
-        basis = f'根据 {len(values)} 道独立本地通过题的难度选择邻近训练带；这不是官方等级分'
+        basis = f'根据 {len(values)} 道独立官方 AC 题的难度选择邻近训练带；这不是官方等级分'
     elif cf:
         level = round((cf[0] - 100) / 50) * 50
         basis = '使用已绑定 Codeforces 官方等级分保守选择训练带；其它平台分数不混算'
@@ -225,7 +231,7 @@ def recommend_problems(library, active, independent, personal, official, hub):
     lower, upper = max(1000, level - 150), min(2199, level + (150 if len(values) >= 5 else 100))
     if not values and not cf and len(public) < 5:
         lower, upper = 1000, 1250
-    known = personal | official
+    known = official  # 2026-10-10：已解 = 官方 AC；本地样例通过不算已解
     foundation = {'模拟', '枚举', '排序', '前缀和', '差分', '贪心', '双指针', '二分查找', '数组', '字符串'}
     graph = {'图论', 'BFS', 'DFS', '并查集', '树', '最短路'}
     basics = {identity for identity in known if foundation & set(library.get(identity, {}).get('tags', []))}

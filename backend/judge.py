@@ -15,6 +15,9 @@ import time
 
 _SIZE=C.c_size_t
 _SPAWN_LOCK=threading.Lock()
+# Child processes inherit these flags, including loader failures before main().
+_NO_ERROR_DIALOGS=0x1|0x2|0x8000
+_MEMORY_EXIT_CODES={0xc0000017,0xc000012d}
 class _Basic(C.Structure):
     _fields_=[('processTime',C.c_longlong),('jobTime',C.c_longlong),('flags',W.DWORD),('minWS',_SIZE),('maxWS',_SIZE),('active',W.DWORD),('affinity',_SIZE),('priority',W.DWORD),('scheduling',W.DWORD)]
 class _IO(C.Structure):
@@ -39,6 +42,8 @@ def _kernel():
       'QueryInformationJobObject':([W.HANDLE,C.c_int,C.c_void_p,W.DWORD,C.c_void_p],W.BOOL),
       'CreateFileW':([W.LPCWSTR,W.DWORD,W.DWORD,C.c_void_p,W.DWORD,W.DWORD,W.HANDLE],W.HANDLE),
       'CreateProcessW':([W.LPCWSTR,W.LPWSTR,C.c_void_p,C.c_void_p,W.BOOL,W.DWORD,C.c_void_p,W.LPCWSTR,C.c_void_p,C.c_void_p],W.BOOL),
+      'GetErrorMode':([],W.UINT),
+      'SetErrorMode':([W.UINT],W.UINT),
       'AssignProcessToJobObject':([W.HANDLE,W.HANDLE],W.BOOL),
       'ResumeThread':([W.HANDLE],W.DWORD),
       'WaitForSingleObject':([W.HANDLE,W.DWORD],W.DWORD),
@@ -83,10 +88,15 @@ def _run(command,inp,directory,time_ms,memory_mb,output_limit=32*1024*1024,cance
             startup.stdin=create_file(input_path,0x80000000,3)
             startup.stdout=create_file(out_path,0x40000000,2);startup.stderr=create_file(err_path,0x40000000,2)
             line=C.create_unicode_buffer(subprocess.list2cmdline([str(a) for a in command]))
+            # Process (rather than thread) error mode is inherited by CreateProcess.
+            # The shared spawn lock also protects its temporary change and restoration.
+            previous_mode=k.GetErrorMode()
+            k.SetErrorMode(previous_mode|_NO_ERROR_DIALOGS)
             try:
                 check(k.CreateProcessW(str(command[0]),line,None,None,True,0x4|0x08000000,None,str(folder),C.byref(startup),C.byref(pi)))
                 handles.extend([pi.process,pi.thread])
             finally:
+                k.SetErrorMode(previous_mode)
                 for handle in (startup.stdin,startup.stdout,startup.stderr):
                     if handle:k.SetHandleInformation(handle,1,0)
         # The process cannot execute before limits and completion notifications are attached.
@@ -110,6 +120,7 @@ def _run(command,inp,directory,time_ms,memory_mb,output_limit=32*1024*1024,cance
         # Drain notifications after process termination; memory denial is not inferred from stderr.
         for _ in range(3):notifications();time.sleep(.002)
         code=W.DWORD();check(k.GetExitCodeProcess(pi.process,C.byref(code)));rc=code.value
+        if rc in _MEMORY_EXIT_CODES:reason='MLE'
         timing=[C.c_ulonglong() for _ in range(4)]
         if k.GetProcessTimes(pi.process,*[C.byref(v) for v in timing]):elapsed=(timing[2].value+timing[3].value)/10000
         measured=_Limits()
@@ -175,8 +186,8 @@ class Judge:
                     if ran['verdict'] or failed and mode=='submit':
                         result.update(verdict=failed,message=message or f'测试 {index+1}/{len(cases)}：{failed}');return result
                 custom=mode=='run' and not sample_run
-                result.update(verdict=failed or ('RUN_OK' if custom else 'SAMPLE_PASS' if mode=='run' or bundle['scope']=='samples' else 'AC'),
-                  message='部分样例输出与期望不符' if failed else '自定义输入运行完成；没有期望输出，不判断正确性' if custom else '官方样例全部通过；尚未验证完整正确性' if mode=='run' or bundle['scope']=='samples' else '本地审核测试全部通过；不是原 OJ 判定')
+                result.update(verdict=failed or ('RUN_OK' if custom else 'SAMPLE_PASS'),
+                  message='部分样例输出与期望不符' if failed else '自定义输入运行完成；没有期望输出，不判断正确性' if custom else '全部测试通过；本地测试不等于 AC，官方 AC 需提交到原站')
                 return result
         except Exception as error:
             result.update(verdict='ERROR',message=str(error));return result

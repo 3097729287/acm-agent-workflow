@@ -157,7 +157,7 @@ def discover_cf(client,now):
         if not c:continue
         contest={'id':c['id'],'name':c['name'],'start':c['startTimeSeconds'],'end':c['startTimeSeconds']+c['durationSeconds'],'series':'Codeforces'}
         item=row('codeforces',contest,p['index'],p['name'],f"https://codeforces.com/contest/{c['id']}/problem/{p['index']}",integer(p.get('rating')),'Codeforces 官方 rating',[CF_TAGS[t] for t in p.get('tags',[]) if t in CF_TAGS])
-        (rows if item['difficulty'] is not None else pending).append(item)
+        rows.append(item)
     return rows,pending,'已检查最近 30 场已结束比赛；缺官方评级的题等待评级发布'
 
 def lg_data(value):
@@ -179,7 +179,7 @@ def discover_lg(client,now):
             if not pid:continue
             level=integer(p.get('difficulty'));evaluation=cf_eq.cf_eq_luogu(level)
             item=row('luogu',contest,entry.get('no') or chr(65+index),p.get('name') or pid,'https://www.luogu.com.cn/problem/'+pid,evaluation['cf_eq_rating'],'CF-EQ v1.0 / 洛谷官方难度档 '+str(level))
-            (rows if item['difficulty'] is not None else pending).append(item)
+            rows.append(item)
     return rows,pending,'洛谷官方结束赛；难度按已有 CF-EQ 档位规则换算，非官方 CF rating'
 
 def discover_at(client,now):
@@ -210,11 +210,11 @@ def discover_at(client,now):
             evaluation=cf_eq.cf_eq_atcoder(native)
             value=row('atcoder',contest,index.strip(),html.unescape(title.strip()),f'https://atcoder.jp/contests/{cid}/tasks/{task}',evaluation['cf_eq_rating'],'CF-EQ · AtCoder Problems估算')
             value['nativeDifficulty']=native;value['difficultyEvidence']=evaluation['difficulty_evidence']
-            (rows if native is not None else pending).append(value)
+            rows.append(value)
     return rows,pending,'官方已结束 ABC/ARC；按既有 CF-EQ 换算 AtCoder Problems 模型估算，模型未出则待定'
 
 def discover_nc(client,now):
-    page=client.text('https://ac.nowcoder.com/acm/contest/vip-index');pending=[]
+    page=client.text('https://ac.nowcoder.com/acm/contest/vip-index');pending=[];rows=[]
     for block in re.findall(r'<div\b[^>]*data-id="(\d+)"[^>]*data-json="([^"]+)"[^>]*>(.*?)(?=<div\b[^>]*data-id=|$)',page,re.S):
         cid,encoded,body=block
         try:meta=json.loads(html.unescape(html.unescape(encoded)))
@@ -224,10 +224,13 @@ def discover_nc(client,now):
         name=re.search(r'<h4>.*?<a[^>]*>(.*?)</a>',body,re.S)
         problems=client.json('https://ac.nowcoder.com/acm/contest/problem-list?token=&id='+cid)
         if problems.get('code')!=0:raise ValueError('牛客公开题单不可用或比赛未公开')
-        for p in (problems.get('data') or {}).get('data') or []:
-            pending.append({'id':f"remote:nowcoder:{cid}::{p.get('index')}",'contest':text(name[1]) if name else cid,'title':p.get('title'),'url':f"https://ac.nowcoder.com/acm/contest/{cid}/{p.get('index')}",'startedAt':utc(start),'endedAt':utc(end),'reason':'牛客未提供可靠数值难度；分值/通过率不作为难度'})
-        if len(pending)>=60:break
-    return [],pending,'牛客公开结束赛题单已发现；无可靠数值难度，等待明确估值证据'
+        entries=(problems.get('data') or {}).get('data') or []
+        contest={'id':cid,'name':text(name[1]) if name else cid,'start':start,'end':end,'series':'牛客'}
+        for p in entries:
+            value=row('nowcoder',contest,p.get('index'),p.get('title'),f"https://ac.nowcoder.com/acm/contest/{cid}/{p.get('index')}",None,'原站未提供可靠数值难度')
+            value['contestProblemCount']=len(entries);rows.append(value)
+        if len(rows)>=100:break
+    return rows,pending,'牛客公开结束赛完整题单；未评级如实标注，XCPC 不设难度限制'
 
 DISCOVERY_ADAPTERS={'codeforces':discover_cf,'luogu':discover_lg,'atcoder':discover_at,'nowcoder':discover_nc}
 

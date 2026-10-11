@@ -1356,10 +1356,17 @@ def cf_pre_text(s):
     Div.3 1122 全 8 题、Div.2 1124 全 6 题、Div.4 1090 的 B/E/F/G），不剥标签的话
     原始 HTML 会原样落进 `题面/*.txt` 与 `samples.py`，贴进 verify.py 直接对不上。
     每个这类 div = 一行，闭合处补换行；老式页面（pre 里是纯文本）不走这段。
+    另有样例含真实 `<br>`/`<br/>`/`<br />` 换行标签（2026-10-10 实测：Div.3 1125 B
+    「Did Not Go to Print」的输出样例在空行处是 `<br />`），先转真实换行、
+    再剥 div 包装、最后解实体——顺序不能反，`&lt;br&gt;` 解码后就是合法标签。
     """
+    # 1) 真实换行标签 → \n（只认 br，不碰其它标签，样例正文里的 <、> 是解实体前的原文）
+    s = re.sub(r"(?is)<br\s*/?>", "\n", s)
+    # 2) 行包装 div → 行内容 + 换行
     if "test-example-line" in s:
         s = re.sub(r"(?is)<div[^>]*test-example-line[^>]*>(.*?)</div>",
                    lambda m: m.group(1) + "\n", s)
+    # 3) 解 HTML 实体（&lt; &gt; &amp; 等真正还原成文本字符）
     return htmllib.unescape(s).strip()
 
 

@@ -160,7 +160,7 @@ class TranslationTests(unittest.TestCase):
         home=self.root/'dsh';home.mkdir();key='sk-'+('a'*32);(home/'.credentials.yaml').write_text('refs:\n  DEEPSEEK_API_KEY: '+key+'\nrecords:\n',encoding='utf-8')
         with patch.dict('os.environ',{},clear=True):self.assertEqual(_local_key(home),key)
         def transport(payload,secret):
-            self.assertEqual(secret,key);self.assertEqual(payload['model'],'deepseek-chat');return {'choices':[{'finish_reason':'stop','message':{'content':'给定一个整数。'}}]}
+            self.assertEqual(secret,key);self.assertEqual(payload['model'],'deepseek-flash');self.assertEqual(payload['thinking'],{'type':'disabled'});return {'choices':[{'finish_reason':'stop','message':{'content':'给定一个整数。'}}]}
         with patch.dict('os.environ',{},clear=True):self.assertEqual(DeepSeekProvider(home,transport)('Public statement'),'给定一个整数。')
         (home/'.credentials.yaml').write_text('refs:\n  DEEPSEEK_API_KEY: encrypted-reference\n',encoding='utf-8')
         with patch.dict('os.environ',{},clear=True),self.assertRaises(ServiceError):_local_key(home)

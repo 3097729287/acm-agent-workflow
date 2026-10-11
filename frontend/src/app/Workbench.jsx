@@ -17,11 +17,11 @@ const TEMPLATE = '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {
 const MAX_BYTES = 64 * 1024;
 const byteLength = value => new TextEncoder().encode(value).byteLength;
 const VERDICTS = {
-  QUEUED: '等待评测', RUNNING: '正在评测', AC: '本地 AC', SAMPLE_PASS: '样例通过', RUN_OK: '运行完成（未校验）',
+  QUEUED: '等待评测', RUNNING: '正在评测', AC: '官方 AC', SAMPLE_PASS: '样例通过', RUN_OK: '运行完成（未校验）',
   WA: '答案错误', TLE: '超时', MLE: '内存超限', RE: '运行错误',
   CE: '编译错误', OLE: '输出超限', ERROR: '评测不可用',
 };
-const OFFICIAL_STATES = { loading: '载入原站', needs_login: '需要登录', needs_verification: '需要验证', ready: '等待提交', submitted: '已提交到原站', judging: '官方评测中', finished: '官方评测完成', error: '原站面板异常', closed: '已返回训练' };
+const OFFICIAL_STATES = { loading: '连接官方', needs_login: '需要登录授权', needs_verification: '需要完成验证', ready: '已连接，可提交', submitted: '正在提交', judging: '官方评测中', finished: '官方评测完成', error: '提交异常', closed: '会话已结束' };
 const OFFICIAL_TERMINAL = new Set(['finished', 'error', 'closed']);
 
 // Serialize saves across mounts as well as edits. An older request must never
@@ -81,6 +81,8 @@ function mergeSubmission(rows, submission) {
 }
 function verdictText(submission) {
   if (!submission) return '尚未运行';
+  // 旧记录里的本地 AC（scope=local + verdict=AC）现在只算样例通过，不叫 AC。
+  if (submission.verdict === 'AC' && submission.scope && submission.scope !== 'official') return '样例通过（旧本地记录）';
   return VERDICTS[submission.verdict] || submission.verdict;
 }
 function dateText(value) {
@@ -105,7 +107,7 @@ function Verdict({ submission }) {
   const pending = submission && submissionPending(submission);
   return <span className={`wb-verdict wb-verdict-${String(submission?.verdict || 'none').toLowerCase()}`}>
     {pending && <LoaderCircle size={13} className="wb-spinner" aria-hidden="true" />}
-    {submission?.verdict === 'AC' && <Check size={13} aria-hidden="true" />}
+    {submission?.verdict === 'AC' && (!submission.scope || submission.scope === 'official') && <Check size={13} aria-hidden="true" />}
     {verdictText(submission)}
   </span>;
 }
@@ -326,6 +328,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
   const sidePracticeLocked = Boolean(problem?.locked && !runningContest);
   const unavailable = loading || !problem || endedContest || sidePracticeLocked || activeRecord.current?.key !== contextKey;
   const busy = creating || Boolean(pending);
+  const officialBusy = openingOfficial || ['loading', 'submitted', 'judging'].includes(officialSession?.status);
   const samples = problem?.samples || [];
   const slot = contest?.slots?.find(row => row.id === problemId);
 
@@ -369,6 +372,18 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
     try {
       const workspace = await apiRef.current('workspace');
       if (isActive(record)) callbacks.current.onProgress?.(workspace);
+      // 官方回执已入库，但当前工作台的提交历史/结果栏还是旧的——拉回本题记录并合并，
+      // 让官方 AC 当场出现在历史里，不必退出重进。
+      if (isActive(record)) {
+        const answer = await apiRef.current(`problem?id=${encodeURIComponent(record.id)}${record.contestId ? `&contestId=${encodeURIComponent(record.contestId)}` : ''}`);
+        if (isActive(record) && Array.isArray(answer?.submissions)) {
+          const history = answer.submissions.slice().sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+          setSubmissions(history);
+          const official = history.find(row => row.scope === 'official' && row.message?.includes(`#${session.submissionId}`)) || history.find(row => row.scope === 'official');
+          if (official) setResultId(official.id);
+          setConsoleOpen(true); setConsoleTab('result');
+        }
+      }
     } catch { /* Keep the genuine official receipt visible if a refresh fails. */ }
   }, []);
 
@@ -458,7 +473,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
   };
   const openOfficial = async (path = 'official/submit') => {
     const record = activeRecord.current;
-    if (!record?.loaded || unavailable || runningContest || sidePracticeLocked || record.officialBusy) return;
+    if (!record?.loaded || unavailable || runningContest || sidePracticeLocked || record.officialBusy || (path === 'official/submit' && officialBusy)) return;
     if (!record.code.trim() || byteLength(record.code) > MAX_BYTES) {
       setActionError(!record.code.trim() ? '先写入代码，再提交到原站。' : '代码超过 64 KiB，请缩短后再提交。');
       return;
@@ -487,8 +502,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
     try {
       const answer = await apiRef.current('official/close', { sessionId: session.id });
       if (isActive(session.record) && officialRef.current?.id === session.id) {
-        officialRef.current = null;
-        setOfficialSession({ ...answer, sessionId: session.id, status: 'closed' });
+        setOfficialSession({ ...answer, sessionId: session.id });
         setOfficialPollError('');
         editorRef.current?.focus();
       }
@@ -513,7 +527,8 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
   };
   const editorCommand = command => {
     if (command === 'official') openOfficial();
-    else if (command === 'submit' || command === 'run') execute(command);
+    else if (command === 'submit') runningContest ? execute('submit') : openOfficial();
+    else if (command === 'run') execute('run');
     else if (command === 'save') manualSave();
     else if (command === 'pane-0') setPane('both');
     else if (command === 'pane-1') focusPane('statement');
@@ -525,7 +540,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
     if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key === 'Enter') {
       event.preventDefault(); event.stopPropagation(); openOfficial();
     } else if (command && event.key === 'Enter') {
-      event.preventDefault(); event.stopPropagation(); execute('submit');
+      event.preventDefault(); event.stopPropagation(); runningContest ? execute('submit') : openOfficial();
     } else if (command && event.key.toLowerCase() === 'r') {
       event.preventDefault(); event.stopPropagation(); execute('run');
     } else if (command && event.key.toLowerCase() === 's') {
@@ -599,11 +614,9 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
     </div>
 
     {sidePracticeLocked && !endedContest && <div className="wb-notice">这题正在模拟赛中，请进入考场运行与提交。</div>}
-    {officialSession && !runningContest && <div className="wb-official-status" aria-label="原站提交状态"><div role="status"><strong>{OFFICIAL_STATES[officialSession.status] || '原站面板'}</strong><span>{officialSession.message}</span>{officialSession.submissionId && <span>提交 #{officialSession.submissionId}</span>}{officialSession.verdict && <b>官方 {officialSession.verdict}</b>}</div><div className="wb-official-actions">
-      {['needs_login', 'needs_verification', 'ready', 'error'].includes(officialSession.status) && <button type="button" className="wb-button" disabled={unavailable || openingOfficial} onClick={() => openOfficial()}>重试官方提交</button>}
-      {!['submitted', 'judging', 'loading'].includes(officialSession.status) && <button type="button" className="wb-button" disabled={unavailable || openingOfficial} onClick={() => openOfficial('official/open')}>原站面板 / 登录</button>}
-      {officialSession.status !== 'closed' && <button type="button" className="wb-button" disabled={openingOfficial} onClick={closeOfficial}>返回训练</button>}
-      {officialSession.status === 'closed' && <button type="button" className="wb-icon-button" aria-label="收起原站状态" onClick={() => setOfficialSession(null)}><ChevronUp size={14} /></button>}
+    {officialSession && !runningContest && <div className="wb-official-status" aria-label="原站提交状态"><div role="status"><strong>{OFFICIAL_STATES[officialSession.status] || '官方提交'}</strong><span>{officialSession.message}</span>{officialSession.submissionId && <span>提交 #{officialSession.submissionId}</span>}{officialSession.verdict && <b>官方 {officialSession.verdict}</b>}</div><div className="wb-official-actions">
+      {['needs_login', 'needs_verification', 'error'].includes(officialSession.status) && <button type="button" className="wb-button" disabled={unavailable || openingOfficial} onClick={() => openOfficial('official/open')}>{officialSession.status === 'needs_verification' ? '完成验证' : '登录授权'}</button>}
+      {['finished', 'closed'].includes(officialSession.status) && <button type="button" className="wb-icon-button" aria-label="收起提交状态" onClick={() => setOfficialSession(null)}><ChevronUp size={14} /></button>}
     </div>{officialPollError && <p className="wb-poll-error" role="alert">{officialPollError}</p>}</div>}
     {actionError && <div className="wb-error-strip" role="alert"><span>{actionError}</span><button type="button" onClick={() => setActionError('')}>知道了</button></div>}
 
@@ -648,10 +661,8 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
           </select>
           <span className={`wb-scope wb-scope-${problem?.judge?.scope || 'samples'}`} title={problem?.judge?.scope === 'local' ? `本地验证用例 ${problem.judge.cases || 0} 个` : '仅使用公开样例，通过样例不会计入已 AC'}>{problem?.judge?.label || (problem?.judge?.scope === 'local' ? '本地验证' : '样例评测')}</span>
           <div className="wb-run-actions">
-      {!runningContest && <button type="button" className="wb-button wb-official-submit" disabled={unavailable || openingOfficial} onClick={() => openOfficial()} title="带入当前代码，提交到原站 · Ctrl+Shift+Enter">{openingOfficial ? <LoaderCircle size={14} className="wb-spinner" /> : <ExternalLink size={14} />}官方提交</button>}
-
-            <button type="button" className="wb-button" disabled={unavailable || busy} onClick={() => execute('run')} title={sample === 'samples' ? '编译并对比全部官方样例 · Ctrl+R' : '编译并运行自定义输入 · Ctrl+R'}><Play size={14} />运行</button>
-            <button type="button" className="wb-button wb-primary" disabled={unavailable || busy} onClick={() => execute('submit')} title="提交到本地评测 · Ctrl+Enter">{busy ? <LoaderCircle size={14} className="wb-spinner" /> : <Send size={14} />}本地提交</button>
+            <button type="button" className="wb-button" disabled={unavailable || busy} onClick={() => execute('run')} title={sample === 'samples' ? '编译并对比全部官方样例 · Ctrl+R' : '编译并运行自定义输入 · Ctrl+R'}><Play size={14} />{sample === 'custom' ? '运行输入' : '运行样例'}</button>
+            <button type="button" className="wb-button wb-primary" disabled={unavailable || (runningContest ? busy : officialBusy)} onClick={() => runningContest ? execute('submit') : openOfficial()} title={runningContest ? '提交到模拟赛评测 · Ctrl+Enter' : '提交到官方网站 · Ctrl+Enter'}>{(runningContest ? busy : officialBusy) ? <LoaderCircle size={14} className="wb-spinner" /> : <Send size={14} />}{runningContest ? '赛内提交' : '提交'}</button>
           </div>
         </div>
         <div className="wb-console-tabs" role="group" aria-label="输入与评测记录">

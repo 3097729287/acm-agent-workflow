@@ -39,7 +39,7 @@ def run(action, output):
             runner = Judge(Fixture(), STATE / 'release-compiler-check')
             result = runner.execute('release-check','#include <iostream>\nint main(){std::cout<<42<<"\\n";}')
             report.update(compiler=str(runner.compiler), compilerVerdict=result['verdict'])
-            assert result['verdict']=='AC', result
+            assert result['verdict']=='SAMPLE_PASS', result
         else:
             worker = threading.Thread(target=server.serve_forever, daemon=True)
             worker.start()
@@ -49,18 +49,74 @@ def run(action, output):
                     time.sleep(.2)
             elif action == '--native-check':
                 import webview
+                from launch import bind_desktop_fullscreen
+                from window_memory import is_fullscreen
+                assert workspace['summary']['total'] == 0, 'Native UI probe requires fresh disposable state'
+                assert server.training.submissions()['total'] == 0, 'Native UI probe refuses existing history'
+                tested = next(row for row in rows if row['contest'] == '入门赛 49' and row['problem'] == 'D')
+                code = '#include <bits/stdc++.h>\nusing namespace std; int main(){int n;cin>>n;long long one[61]={1},two[61]={0};for(int i=1;i<=n;++i){one[i]=one[i-1]+two[i-1];if(i>=2)two[i]=one[i-2];}cout<<one[n]+two[n]<<"\\n";}\n'
+                server.training.save_draft(tested['id'], code)
                 window = webview.create_window('TB release validation',report['baseUrl'],hidden=True,width=1480,height=920)
+                bind_desktop_fullscreen(server, window)
                 def check():
-                    try:
-                        deadline=time.monotonic()+30
-                        while time.monotonic()<deadline:
-                            if window.evaluate_js("!!document.querySelector('.nav-item')"):
-                                report['nativeLoaded']=True
+                    def wait_js(script, timeout=30):
+                        deadline = time.monotonic() + timeout
+                        while time.monotonic() < deadline:
+                            if window.evaluate_js(script):
                                 return
                             time.sleep(.1)
-                        raise RuntimeError('Desktop interface did not load')
+                        raise RuntimeError('Native UI condition timed out: ' + script)
+
+                    def key(value, ctrl=False):
+                        window.evaluate_js('window.dispatchEvent(new KeyboardEvent("keydown",' +
+                                           json.dumps({'key': value, 'ctrlKey': ctrl, 'bubbles': True}) + '))')
+
+                    try:
+                        wait_js("!!document.querySelector('.nav-item')")
+                        report['nativeLoaded'] = True
+                        window.evaluate_js("document.querySelector('[aria-label=\"偏好设置\"]').click()")
+                        wait_js("!!document.querySelector('input[aria-label=\"全屏\"]') && !document.querySelector('input[aria-label=\"全屏\"]').disabled")
+                        assert not is_fullscreen(window)
+                        window.evaluate_js("document.querySelector('input[aria-label=\"全屏\"]').click()")
+                        wait_js("document.querySelector('input[aria-label=\"全屏\"]').checked")
+                        assert is_fullscreen(window)
+                        from System.Windows.Forms import Screen
+                        assert window.native.Bounds == Screen.FromControl(window.native).Bounds
+                        window.evaluate_js("document.querySelector('input[aria-label=\"全屏\"]').click()")
+                        wait_js("!document.querySelector('input[aria-label=\"全屏\"]').checked")
+                        assert not is_fullscreen(window)
+                        report['fullscreenToggle'] = True
+                        key('F11')
+                        wait_js("document.querySelector('input[aria-label=\"全屏\"]').checked")
+                        assert is_fullscreen(window)
+                        key('F11')
+                        wait_js("!document.querySelector('input[aria-label=\"全屏\"]').checked")
+                        assert not is_fullscreen(window)
+                        report['f11FrontendEvent'] = True
+                        key('2', ctrl=True)
+                        wait_js("!!document.querySelector('input[aria-label=\"搜索题目\"]')")
+                        window.evaluate_js("(() => {const field=document.querySelector('input[aria-label=\"搜索题目\"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,'入门赛 49 D');field.dispatchEvent(new Event('input',{bubbles:true}));})()")
+                        title = json.dumps(tested['title'], ensure_ascii=False)
+                        wait_js("Array.from(document.querySelectorAll('.problem-table tbody tr')).some(row=>row.textContent.includes(" + title + "))")
+                        window.evaluate_js("Array.from(document.querySelectorAll('.problem-table tbody tr')).find(row=>row.textContent.includes(" + title + ")).querySelector('.problem-title').click()")
+                        wait_js("!!document.querySelector('.wb-run-actions') && document.querySelector('.cm-content')?.textContent.includes('long long one')")
+                        labels = window.evaluate_js("Array.from(document.querySelectorAll('.wb-run-actions button')).map(node=>node.textContent.trim())")
+                        assert labels == ['运行样例', '提交'], labels
+                        report['buttonOrder'] = labels
+                        window.evaluate_js("document.querySelectorAll('.wb-run-actions button')[0].click()")
+                        wait_js("document.querySelector('.wb-result-summary')?.textContent.includes('样例通过')", timeout=90)
+                        submission = next(row for row in server.training.submissions()['submissions'] if row['problemId'] == tested['id'] and row['mode'] == 'run')
+                        assert submission['verdict'] == 'SAMPLE_PASS', submission['verdict']
+                        assert submission['total'] > 0 and submission['passed'] == submission['total']
+                        assert server.training.workspace()['summary']['accepted'] == 0
+                        assert server.training.insights(server.store.extensions.snapshot())['growth']['totalXp'] == 0
+                        assert all(not task['completed'] and task['scope'] == 'official' and task['version'] == 2 for task in server.training.daily_tasks()['tasks'])
+                        report['localSubmission'] = {name: submission[name] for name in ('verdict', 'scope', 'passed', 'total')}
+                        report['localAwardsNothing'] = True
+                        report['officialSubmissionSent'] = False
                     except Exception as error:
-                        report.update(ok=False,error=str(error))
+                        import traceback
+                        report.update(ok=False,error=str(error),traceback=traceback.format_exc())
                     finally:
                         window.destroy()
                 webview.start(check,gui='edgechromium',private_mode=True,storage_path=str(STATE/'release-profile'))

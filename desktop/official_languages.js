@@ -1,31 +1,33 @@
 // The displayed language may name a C++ standard, a compiler release, or both.
 // We only select values in actual language controls, never arbitrary page text.
 function compilerCandidate(text, code = '', platform = '') {
-  const value = String(text || '').replace(/\s+/g, ' ').trim();
+  const value = String(text || '').replaceAll('（', '(').replaceAll('）', ')').replace(/\s+/g, ' ').trim();
   if (!/(?:c\+\+|g\+\+|gnu\+\+|clang\+\+)/i.test(value) || /(?:c#|objective)/i.test(value)) return null;
   let required = /(?:std::(?:print|println|expected)|#\s*include\s*<\s*(?:print|expected)\s*>)/.test(code) ? 23
     : /(?:std::(?:ranges|span)|#\s*include\s*<\s*(?:ranges|span|concepts|coroutine)\s*>|\b(?:concept|co_await|co_return|requires)\b)/.test(code) ? 20 : 17;
-  let explicit = value.match(/(?:c\+\+|g\+\+|gnu\+\+)\s*(?:std\s*)?(11|14|17|20|23|26|0x|1y|1z|2a|2b|2c)\b(?!\.\d)/i);
+  let explicit = value.match(/\b(?:c\+\+|g\+\+|gnu\+\+)\s*(?:std\s*)?(11|14|17|20|23|26|0x|1y|1z|2a|2b|2c)\b(?!\.\d)/i);
   if (explicit && /g\+\+/i.test(explicit[0]) && value.lastIndexOf('(', explicit.index) > value.lastIndexOf(')', explicit.index)) explicit = null;
   const aliases = {'0x':11,'1y':14,'1z':17,'2a':20,'2b':23,'2c':26};
   let standard = explicit ? (aliases[explicit[1].toLowerCase()] || Number(explicit[1])) : null;
-  const compiler = value.match(/(?:gcc|g\+\+|clang)\s*[-:]?\s*(\d{1,2})(?:\.\d+)?/i);
+  const compiler = value.match(/(?:gcc|g\+\+|clang(?:\+\+)?)\s*[-:]?\s*(\d{1,2})(?:\.\d+)?/i);
   const version = compiler ? Number(compiler[1]) : null;
   // Nowcoder's C++(g++ 13) names GCC, not a C++13 language standard.
   // Interpret compiler-only options with the compiler's documented default.
-  if (standard === null && /gcc|g\+\+/i.test(value) && version >= 11) standard = version >= 16 ? 20 : 17;
+  if (standard === null && /\b(?:gcc|g\+\+)/i.test(value) && version >= 11) standard = version >= 16 ? 20 : 17;
+  // Clang 16+ defaults to GNU++17; clang++18 is a compiler release.
+  if (standard === null && /clang/i.test(value) && version >= 16) standard = 17;
   if (standard !== null && standard < required) return null;
   // GCC 11+ defaults to GNU++17; GCC 8+ implements C++17 but an unnamed
   // site choice does not prove that it actually enables that standard.
   if (standard === null && required > 17) return null;
-  if (standard === null && version !== null && /gcc|g\+\+/i.test(value) && version < 11) return null;
+  if (standard === null && version !== null && /\b(?:gcc|g\+\+)/i.test(value) && version < 11) return null;
   return {label:value, standard:standard || 17, compilerVersion:version,
     score:standard !== null ? standard - required : version !== null ? 40 - Math.min(version,30) : 45};
 }
 
 async function selectOfficialCompiler(code, platform = '') {
   const site = {
-    '牛客': { selected: '.nc-select .nc-select-label,.nc-select .selected-value,.select-language,.language-select,.lang-select .selected-text', options: '.nc-select-item,.nc-select-option,.select-language-menu li,.language-list li' },
+    '牛客': { selected: '.btn-language .el-input__inner,.language-select .el-input__inner,.nc-select .nc-select-label,.nc-select .selected-value,.select-language,.language-select .selected,.lang-select .selected-text', options: '.nc-select-item,.nc-select-option,.select-language-menu li,.language-list li' },
     '洛谷': { selected: '.language-select .selected,.select-language .selected,.el-input__inner', options: '.language-list li,.el-select-dropdown__item' },
     'AtCoder': { selected: '#select-lang + .select2-container .select2-selection__rendered', options: '.select2-results__option' },
     'Codeforces': { selected: '', options: '' },

@@ -164,7 +164,7 @@ function contestGroups(rows) {
   const map = new Map();
   for (const row of list(rows)) {
     const key = `${row.platform || ''}::${row.contest}`;
-    if (!map.has(key)) map.set(key, { key, name: row.contest, platform: row.platform, series: row.series, rows: [] });
+    if (!map.has(key)) map.set(key, { key, name: row.contest, platform: row.platform, series: row.series, examYear: row.examYear, examStage: row.examStage, notice: row.collectionNotice, rows: [] });
     map.get(key).rows.push(row);
   }
   return [...map.values()].map(group => ({ ...group, rows: group.rows.sort((a, b) => String(a.problem).localeCompare(String(b.problem), 'en', { numeric: true })) })).sort(compareContestNewest);
@@ -173,6 +173,7 @@ function Difficulty({ row, locked = false }) { return <span className={`competit
 export function CompetitionPage({ rows, workspace, hub, onTrain, onJoin, initialContest, onBack }) {
   const groups = useMemo(() => contestGroups(rows), [rows]);
   const [query, setQuery] = useState(''), [platform, setPlatform] = useState(''), [filter, setFilter] = useState('all');
+  const [shelf, setShelf] = useState('all'), [examYear, setExamYear] = useState(''), [examStage, setExamStage] = useState('');
   const [selected, setSelected] = useState(null), [joining, setJoining] = useState(false), [joinError, setJoinError] = useState('');
   const progress = useMemo(() => new Map(list(workspace?.training).map(row => [row.id, row])), [workspace?.training]);
   const lockedIds = new Set(workspace?.activeContest?.status === 'running' ? list(workspace.activeContest.slots).map(row => row.id) : []);
@@ -186,7 +187,9 @@ export function CompetitionPage({ rows, workspace, hub, onTrain, onJoin, initial
   const current = groups.find(group => group.key === selected);
   const activeCount = group => group.rows.filter(row => progress.has(row.id)).length;
   const acceptedCount = group => group.rows.filter(row => progress.get(row.id)?.accepted).length;
-  const filtered = groups.filter(group => (!platform || group.platform === platform)
+  const filtered = groups.filter(group => (shelf !== 'lanqiao' || group.series === '蓝桥杯 C/C++大学B')
+    && (!examYear || String(group.examYear) === examYear) && (!examStage || group.examStage === examStage)
+    && (!platform || group.platform === platform)
     && (!query.trim() || `${group.name} ${group.platform} ${group.rows.map(row => `${row.title} ${row.problem} ${lockedIds.has(row.id) ? '' : list(row.tags).join(' ')}`).join(' ')}`.toLowerCase().includes(query.trim().toLowerCase()))
     && (filter === 'all' || filter === 'joined' ? filter === 'all' || activeCount(group) > 0 : filter === 'available' ? activeCount(group) === 0 : acceptedCount(group) < group.rows.length));
   const join = async group => { if (!onJoin || joining) return; setJoining(true); setJoinError(''); try { await onJoin(group.name); } catch (issue) { setJoinError(issue.message || '暂时无法加入训练，请重试。'); } finally { setJoining(false); } };
@@ -195,14 +198,17 @@ export function CompetitionPage({ rows, workspace, hub, onTrain, onJoin, initial
     return <div className="competition-page competition-detail" aria-label={`${current.name}比赛详情`}>
       <div className="competition-detail-heading"><button type="button" className="progress-button" onClick={() => { setSelected(null); if (initialContest) onBack?.(); }}><ArrowLeft size={14} />全部比赛</button><div><h2>{current.name}</h2><span>{current.platform} · {contestDateLabel(current)} · {current.rows.length} 题 · 已通过 {acceptedCount(current)} 题</span></div>{onJoin && <button type="button" className="progress-button progress-primary" disabled={joining || inMock || activeCount(current) === current.rows.length} onClick={() => join(current)}>{joining ? <LoaderCircle size={14} className="progress-spin" /> : <Flag size={14} />}{activeCount(current) === current.rows.length ? '已加入训练' : activeCount(current) ? '加入剩余题目' : '加入我的训练'}</button>}</div>
       {inMock && <div className="competition-notice">本场部分题目正在模拟赛中，难度和知识点将在赛后显示。请从模拟赛页继续。</div>}
+      {current.notice && <div className="competition-notice">{current.notice}题面可直接练习，题解逐步补充。</div>}
       {joinError && <p className="connection-error" role="alert">{joinError}</p>}
       <div className="competition-question-list">{current.rows.map(row => {
         const state = progress.get(row.id), locked = lockedIds.has(row.id);
-        return <div className="competition-question" key={row.id}><span className="competition-letter">{row.problem}</span><div className="competition-question-main"><strong>{row.title}</strong><div className="competition-question-meta">{locked ? <span>模拟赛进行中</span> : list(row.tags).map(tag => <span className="competition-tag" key={tag}>{tag}</span>)}<span>{row.solutionAvailable === false ? '题解未生成' : row.solutionAvailable === true ? '有题解' : '题解状态未知'}</span></div></div><Difficulty row={row} locked={locked} /><span className={`competition-result${state?.accepted ? ' competition-accepted' : ''}`}>{locked ? '考场中' : state?.accepted ? '本地通过' : state?.verdict === 'SAMPLE_PASS' ? '样例通过' : state ? '已加入' : '未加入'}</span><button type="button" className="progress-button" disabled={!onTrain || locked} onClick={() => onTrain?.(row.id)}>练习<ArrowRight size={13} /></button></div>;
+        return <div className="competition-question" key={row.id}><span className="competition-letter">{row.problem}</span><div className="competition-question-main"><strong>{row.title}</strong><div className="competition-question-meta">{locked ? <span>模拟赛进行中</span> : list(row.tags).map(tag => <span className="competition-tag" key={tag}>{tag}</span>)}<span>{row.solutionAvailable === false ? '题解未生成' : row.solutionAvailable === true ? '有题解' : '题解状态未知'}</span></div></div><Difficulty row={row} locked={locked} /><span className={`competition-result${state?.accepted ? ' competition-accepted' : ''}`}>{locked ? '考场中' : state?.accepted ? (state.scope === 'official' ? '官方通过' : '本地通过') : state?.verdict === 'SAMPLE_PASS' ? '样例通过' : state ? '已加入' : '未加入'}</span><button type="button" className="progress-button" disabled={!onTrain || locked} onClick={() => onTrain?.(row.id)}>练习<ArrowRight size={13} /></button></div>;
       })}</div>
     </div>;
   }
   return <div className="competition-page" aria-label="比赛列表">
+    <div className="ranking-tabs" role="tablist" aria-label="比赛题库分类"><button role="tab" aria-selected={shelf === 'all'} className={shelf === 'all' ? 'active' : ''} onClick={() => { setShelf('all'); setExamYear(''); setExamStage(''); }}>全部比赛</button><button role="tab" aria-selected={shelf === 'lanqiao'} className={shelf === 'lanqiao' ? 'active' : ''} onClick={() => { setShelf('lanqiao'); setPlatform(''); }}>蓝桥杯 B 组历年</button></div>
+    {shelf === 'lanqiao' && <><p className="competition-sync-note">C/C++大学B组 · 2013—2026 年公开题目，按初赛 / 决赛分类。早年部分原卷未完整公开；填空题有合并，当前题单不代表原卷题数或题序。</p><div className="competition-toolbar"><select aria-label="蓝桥杯年份" value={examYear} onChange={event => setExamYear(event.target.value)}><option value="">全部年份</option>{[...new Set(groups.filter(group => group.examYear).map(group => group.examYear))].sort((a,b) => b-a).map(year => <option key={year}>{year}</option>)}</select><select aria-label="蓝桥杯赛段" value={examStage} onChange={event => setExamStage(event.target.value)}><option value="">初赛与决赛</option><option>初赛</option><option>决赛</option></select></div></>}
     <div className="competition-toolbar"><label className="competition-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索比赛、题名或知识点" aria-label="搜索比赛" /></label><select value={platform} onChange={event => setPlatform(event.target.value)} aria-label="比赛平台"><option value="">全部平台</option>{[...new Set(groups.map(group => group.platform).filter(Boolean))].map(item => <option key={item}>{item}</option>)}</select><select value={filter} onChange={event => setFilter(event.target.value)} aria-label="比赛训练情况"><option value="all">全部比赛</option><option value="joined">已加入训练</option><option value="available">尚未加入</option><option value="unfinished">尚未全部通过</option></select><span className="competition-count">{filtered.length} 场</span></div>
     {hub?.sync?.message && <p className="competition-sync-note">{hub.sync.message}</p>}
     <div className="competition-list">{filtered.map(group => <button type="button" className="competition-card" key={group.key} onClick={() => setSelected(group.key)} aria-label={`查看 ${group.platform} ${group.name}，${group.rows.length} 道题`}><span className="competition-platform">{group.platform}</span><span className="competition-card-title"><strong>{group.name}</strong><small>{contestDateLabel(group)} · {group.rows.length} 题 · {activeCount(group) ? `已加入 ${activeCount(group)}，通过 ${acceptedCount(group)}` : '尚未加入训练'}</small></span><span className="competition-problem-tokens">{group.rows.map(row => <span className={`competition-problem-token${progress.get(row.id)?.accepted ? ' competition-token-accepted' : ''}`} key={row.id}><b>{row.problem}</b><Difficulty row={row} locked={lockedIds.has(row.id)} /></span>)}</span><ChevronRight size={16} /></button>)}</div>
@@ -282,7 +288,7 @@ export function ConnectionsPanel({ hub, api, onChanged, onError, includeTranslat
   </section>;
 }
 
-function updateDraft(hub) { return { autoSync: hub?.settings?.autoSync ?? true, intervalHours: hub?.settings?.intervalHours ?? 6, minDifficulty: hub?.settings?.minDifficulty ?? 1000, maxDifficulty: hub?.settings?.maxDifficulty ?? 2199 }; }
+function updateDraft(hub) { return { autoSync: hub?.settings?.autoSync ?? true, intervalHours: hub?.settings?.intervalHours ?? 6, minDifficulty: hub?.settings?.minDifficulty ?? 0, maxDifficulty: hub?.settings?.maxDifficulty ?? 10000 }; }
 export function UpdatePanel({ hub, api, onChanged, onError, onContent, showNotifications = true }) {
   const [draft, setDraft] = useState(() => updateDraft(hub)), [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState(''), [unreadOnly, setUnreadOnly] = useState(false);
   const dirty = useRef(false), editRevision = useRef(0);
@@ -303,7 +309,7 @@ export function UpdatePanel({ hub, api, onChanged, onError, onContent, showNotif
     {updates.sourceNotice && <p className="progress-small">{updates.sourceNotice}</p>}
     <form onSubmit={event => { event.preventDefault(); request('hub/configure', { ...draft, intervalHours: Number(draft.intervalHours), minDifficulty: Number(draft.minDifficulty), maxDifficulty: Number(draft.maxDifficulty) }); }}>
       <div className="update-options"><label className="progress-check"><input type="checkbox" checked={draft.autoSync} onChange={event => change('autoSync', event.target.checked)} />自动检查已结束的比赛</label><label>检查间隔<select value={draft.intervalHours} onChange={event => change('intervalHours', event.target.value)} aria-label="自动检查间隔">{[1, 3, 6, 12, 24].map(hours => <option key={hours} value={hours}>{hours} 小时</option>)}</select></label></div>
-      <div className="update-difficulty-range"><span>新题难度范围</span><label><span className="update-sr-only">最低难度</span><input type="number" min="1000" max="2199" step="1" value={draft.minDifficulty} onChange={event => change('minDifficulty', event.target.value)} aria-label="自动收录最低难度" required /></label><span>至</span><label><span className="update-sr-only">最高难度</span><input type="number" min={Math.max(1000, Number(draft.minDifficulty) || 1000)} max="2199" step="1" value={draft.maxDifficulty} onChange={event => change('maxDifficulty', event.target.value)} aria-label="自动收录最高难度" required /></label></div>
+      <div className="update-difficulty-range"><span>新题难度范围</span><label><span className="update-sr-only">最低难度</span><input type="number" min="0" max="10000" step="1" value={draft.minDifficulty} onChange={event => change('minDifficulty', event.target.value)} aria-label="自动收录最低难度" required /></label><span>至</span><label><span className="update-sr-only">最高难度</span><input type="number" min={Math.max(0, Number(draft.minDifficulty) || 0)} max="10000" step="1" value={draft.maxDifficulty} onChange={event => change('maxDifficulty', event.target.value)} aria-label="自动收录最高难度" required /></label></div>
       <div className="progress-actions"><button type="submit" className="progress-button progress-primary" disabled={busy || !api}><Check size={14} />保存更新偏好</button><button type="button" className="progress-button" disabled={busy || sync.busy || !api} onClick={() => request('hub/sync', {})}>{sync.busy ? <LoaderCircle size={14} className="progress-spin" /> : <RefreshCw size={14} />}现在检查</button></div>
     </form>
     {error && <p className="connection-error" role="alert">{error}</p>}{message && <p className="connection-message" role="status">{message}</p>}

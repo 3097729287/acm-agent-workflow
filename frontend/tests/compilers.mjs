@@ -29,6 +29,17 @@ try {
     assert.equal(result.compilerVersion, 13);
     assert.equal(await page.locator('button').textContent(), 'C++(g++ 13)');
   }
+  // Actual Nowcoder 2026 DOM: Element UI readonly input, full-width parentheses.
+  for (const label of ['Java', 'C++（clang++18）']) {
+    await page.setContent(`<div class="el-select el-select--small btn-language"><div class="el-input"><input class="el-input__inner" readonly value="${label}"></div><ul class="el-select-dropdown" hidden><li class="el-select-dropdown__item">C++（clang++18）</li><li class="el-select-dropdown__item">C++(g++ 13)</li><li class="el-select-dropdown__item">Java</li></ul></div>`);
+    await page.addScriptTag({ content: `document.querySelector('input').onclick=()=>document.querySelector('ul').hidden=false; document.querySelectorAll('li').forEach(node=>node.onclick=()=>{document.querySelector('input').value=node.textContent;document.querySelector('ul').hidden=true;});` });
+    await page.addScriptTag({ content: source });
+    const result = await page.evaluate(() => selectOfficialCompiler('int main(){}', '牛客'));
+    assert.equal(result.standard, 17);
+    assert.equal(result.compilerVersion, 18);
+    assert.equal(await page.locator('input').inputValue(), 'C++（clang++18）');
+    assert.equal(await page.evaluate(() => selectOfficialCompiler('#include <ranges>\nint main(){}', '牛客')), null);
+  }
   await page.setContent('<select name="language"><option>Java 17</option><option>C++14</option></select><p>GNU G++20 13.2</p>');
   await page.addScriptTag({ content: source });
   assert.equal(await page.evaluate(() => selectOfficialCompiler('int main(){}', '牛客')), null);

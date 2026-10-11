@@ -119,6 +119,14 @@ class Handler(BaseHTTPRequestHandler):
                     value = training.start_training(body.get("id"))
                 elif path == "/api/training/remove":
                     value = training.remove_training(body.get("id"))
+                elif path == "/api/training/clear":
+                    value = training.clear_training()
+                elif path == "/api/goals/save":
+                    from goals import Goals
+                    value = Goals(training).save(body)
+                elif path == "/api/goals/archive":
+                    from goals import Goals
+                    value = Goals(training).archive(body.get('id'))
                 elif path == "/api/training/contest":
                     value = training.start_practice_set(body.get("contest"))
                 elif path == "/api/draft":
@@ -168,11 +176,18 @@ class Handler(BaseHTTPRequestHandler):
                     value = opened if isinstance(opened, dict) else {"sessionId": opened, "platform": row.get("platform"), "url": url, "status": "opened"}
                     if not isinstance(value.get("sessionId"), str):
                         raise APIError(503, "原生提交面板没有返回有效会话")
-                    self.server.official_sessions[value["sessionId"]] = {"id": identity, "contestId": body.get("contestId"), "url": url}
+                    self.server.register_official_session(value["sessionId"], {"id": identity, "contestId": body.get("contestId"), "url": url, "code": code}, value)
                 elif path == "/api/official/close":
                     if not callable(self.server.official_closer):
                         raise APIError(503, "当前浏览器没有原生官方面板")
                     value = self.server.official_closer(body.get("sessionId"))
+                elif path == "/api/desktop/fullscreen":
+                    if not callable(getattr(self.server, "desktop_fullscreen", None)):
+                        raise APIError(503, "当前浏览器测试没有原生窗口，无法切换全屏")
+                    requested = body.get("fullscreen")
+                    if not isinstance(requested, bool):
+                        raise APIError(400, "全屏参数必须是布尔值")
+                    value = self.server.desktop_fullscreen(requested)
                 elif path == "/api/problem/translate":
                     value = self.server.translate_problem(body.get("id"), body.get("contestId"))
                 elif path == "/api/translation/test":
@@ -202,6 +217,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, self.server.training.insights(store.extensions.snapshot()))
             elif path == "/api/daily-tasks":
                 self.send_json(200, self.server.training.daily_tasks())
+            elif path == "/api/goals":
+                from goals import Goals
+                self.send_json(200, Goals(self.server.training).list())
+            elif path == "/api/contests/events":
+                self.send_json(200, self.server.training.replay_events())
             elif path in ("/api/profile", "/api/identity"):
                 self.send_json(200, self.server.training.profile())
             elif path in ("/api/leaderboard", "/api/rankings"):
@@ -224,6 +244,11 @@ class Handler(BaseHTTPRequestHandler):
                     for source in value.get("sourceProblemIds", []):
                         self.server.training.assert_solution_unlocked(source)
                 self.send_json(200, value)
+            elif path == "/api/desktop/fullscreen":
+                if callable(getattr(self.server, "desktop_state", None)):
+                    self.send_json(200, self.server.desktop_state())
+                else:
+                    self.send_json(200, {"available": False, "fullscreen": False})
             elif path == "/api/official/status":
                 identity = parse_qs(target.query).get("sessionId", [None])[0]
                 if not callable(self.server.official_status):
@@ -233,7 +258,9 @@ class Handler(BaseHTTPRequestHandler):
                     if not session:
                         raise APIError(404, "没有找到本次原站提交会话")
                     self.server.training.assert_solution_unlocked(session["id"])
-                self.send_json(200, self.server.official_status(identity))
+                receipt = self.server.official_status(identity)
+                self.server.record_official_receipt(identity, receipt)
+                self.send_json(200, receipt)
             elif path == "/api/submission":
                 identity = parse_qs(target.query).get("id", [None])[0]
                 self.send_json(200, self.server.training.submission(identity))
@@ -294,6 +321,62 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class LocalServer(ThreadingHTTPServer):
+    def register_official_session(self, identity, session, receipt):
+        with self.official_session_lock:
+            self.official_sessions.setdefault(identity, session)
+            pending = self.official_pending_receipts.pop(identity, None)
+        if isinstance(pending or receipt, dict) and (pending or receipt).get('submissionId'):
+            self.record_official_pending(identity, pending or receipt)
+        return self.record_official_receipt(identity, pending or receipt)
+
+    def record_official_pending(self, identity, session):
+        """桥在确认原站受理（拿到提交 ID）时调用，冻结受理时刻与查看状态，
+        返回持久化的 pending 供恢复用；落库失败返回 None。"""
+        if not isinstance(session, dict):
+            return None
+        with self.official_session_lock:
+            context = self.official_sessions.get(identity)
+            if context is None:
+                self.official_pending_receipts[identity] = dict(session)
+                return None
+        record = {"sessionId": identity, "submissionId": session.get("submissionId"),
+                  "acceptedAt": session.get("acceptedAt"), "problemId": context["id"],
+                  "url": context["url"], "code": context["code"],
+                  "platform": session.get("platform")}
+        try:
+            self.training.save_official_pending(record)
+        except Exception:
+            return None
+        return record
+
+    def resume_official_sessions(self, url, code):
+        """启动后按题目 URL + 代码恢复未完成官方回执，供桥重新绑定。"""
+        try:
+            return self.training.official_pending(url, code)
+        except Exception:
+            return []
+
+    def record_official_receipt(self, identity, receipt):
+        if not isinstance(receipt, dict) or receipt.get('status') != 'finished':
+            return None
+        with self.official_session_lock:
+            session = self.official_sessions.get(identity)
+            if session is None:
+                # A fast native result can arrive while open() is returning,
+                # before the HTTP handler has registered its immutable code.
+                self.official_pending_receipts[identity] = dict(receipt)
+                while len(self.official_pending_receipts) > 30:
+                    self.official_pending_receipts.pop(next(iter(self.official_pending_receipts)))
+        if session:
+            saved = self.training.record_official(session, receipt)
+            if saved and receipt.get('submissionId'):
+                try:
+                    self.training.clear_official_pending(url=session.get('url'), code=session.get('code'))
+                except Exception:
+                    pass
+            return saved
+        return None
+
     def translation_service(self):
         with self.translation_lock:
             if self.translation is None:
@@ -305,7 +388,9 @@ class LocalServer(ThreadingHTTPServer):
         with self.training.lock:
             key = canonical_url(url)
             ids = {row["id"] for row in self.store.data()["rows"] if key and canonical_url(row.get("url")) == key}
-            ids.update(session["id"] for session in self.official_sessions.values() if key and canonical_url(session["url"]) == key)
+            with self.official_session_lock:
+                sessions = list(self.official_sessions.values())
+            ids.update(session["id"] for session in sessions if key and canonical_url(session["url"]) == key)
             if not ids:
                 raise ServiceError(404, "这道原站题目不在当前题库中")
             for identity in ids:
@@ -363,6 +448,10 @@ def create_server(port=0, data_file=None, data_root=None, dist_dir=None, history
         server.official_opener = official_opener
         server.official_submitter, server.official_status, server.official_closer = official_submitter, official_status, official_closer
         server.official_sessions = {}
+        server.official_pending_receipts = {}
+        server.official_session_lock = threading.RLock()
+        server.desktop_state = None
+        server.desktop_fullscreen = None
         server.state_dir = Path(training_file).parent
         from knowledge import KnowledgeAnalysisCache
         server.store.knowledge_analysis = KnowledgeAnalysisCache(server.state_dir / "tb-knowledge-analysis.json")

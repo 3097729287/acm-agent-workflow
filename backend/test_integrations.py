@@ -44,7 +44,7 @@ class PublicSchemaTests(unittest.TestCase):
     def test_cf_finished_and_missing_rating_do_not_guess(self):
         client=Client({'https://codeforces.com/api/contest.list?gym=false':{'status':'OK','result':[{'id':1,'name':'Ended','phase':'FINISHED','startTimeSeconds':1,'durationSeconds':100},{'id':2,'name':'Future','phase':'FINISHED','startTimeSeconds':int(NOW.timestamp())+100,'durationSeconds':1}]},'https://codeforces.com/api/problemset.problems':{'status':'OK','result':{'problems':[{'contestId':1,'index':'A','name':'Rated','rating':1300,'tags':['greedy']},{'contestId':1,'index':'B','name':'Unrated','tags':[]},{'contestId':2,'index':'A','name':'Future','rating':1300}]}}})
         rows,pending,_=P.discover_cf(client,NOW)
-        self.assertEqual(len(rows),1);self.assertEqual(rows[0]['difficulty'],1300);self.assertEqual(rows[0]['tags'],['贪心']);self.assertEqual(len(pending),1)
+        self.assertEqual(len(rows),2);self.assertEqual(rows[0]['difficulty'],1300);self.assertEqual(rows[0]['tags'],['贪心']);self.assertIsNone(rows[1]['difficulty']);self.assertEqual(pending,[])
     def test_cf_exact_url_earliest_accept_and_unique_counts(self):
         prefix='https://codeforces.com/api/'
         submissions=[{'creationTimeSeconds':200,'verdict':'OK','problem':{'contestId':1,'index':'A','name':'P','tags':['dp'],'rating':1400}},{'creationTimeSeconds':100,'verdict':'OK','problem':{'contestId':1,'index':'A','name':'P','tags':['dp'],'rating':1400}},{'creationTimeSeconds':50,'verdict':'WRONG_ANSWER','problem':{'contestId':1,'index':'B'}}]
@@ -61,19 +61,19 @@ class PublicSchemaTests(unittest.TestCase):
         html='<tr><td><time>2026-10-01 12:00:00+0900</time></td><td><a href="/contests/abc001">ABC 001</a></td><td>01:40</td></tr><tr><td><time>2027-10-01 12:00:00+0900</time></td><td><a href="/contests/abc002">Future</a></td><td>01:40</td></tr>'
         tasks='<td class="text-center no-break"><a href="/contests/abc001/tasks/abc001_c">C</a></td><td><a href="/contests/abc001/tasks/abc001_c">Unrated</a></td>'
         rows,pending,_=P.discover_at(Client({'https://atcoder.jp/contests/archive?lang=en':html,'https://atcoder.jp/contests/abc001/tasks?lang=en':tasks}),NOW)
-        self.assertEqual(rows,[]);self.assertEqual(len(pending),1);self.assertEqual(pending[0]['contestId'],'abc001')
+        self.assertEqual(len(rows),1);self.assertIsNone(rows[0]['difficulty']);self.assertEqual(rows[0]['contestId'],'abc001');self.assertEqual(pending,[])
     def test_atcoder_models_reuse_existing_cf_eq_estimate_and_keep_missing(self):
         page='<tr><td><time>2026-10-01 12:00:00+0900</time></td><td><a href="/contests/abc001">ABC 001</a></td><td>01:40</td></tr>'
         tasks='<td class="text-center no-break"><a href="/contests/abc001/tasks/abc001_c">C</a></td><td><a href="/contests/abc001/tasks/abc001_c">Rated</a></td><td class="text-center no-break"><a href="/contests/abc001/tasks/abc001_d">D</a></td><td><a href="/contests/abc001/tasks/abc001_d">Unrated</a></td>'
         client=Client({'https://atcoder.jp/contests/archive?lang=en':page,'https://atcoder.jp/contests/abc001/tasks?lang=en':tasks,'https://kenkoooo.com/atcoder/resources/problem-models.json':{'abc001_c':{'difficulty':1000}}})
         rows,pending,_=P.discover_at(client,NOW)
         import cf_eq
-        self.assertEqual(rows[0]['difficulty'],cf_eq.cf_eq_atcoder(1000)['cf_eq_rating']);self.assertEqual(rows[0]['difficultySource'],'CF-EQ · AtCoder Problems估算');self.assertEqual(len(pending),1)
+        self.assertEqual(rows[0]['difficulty'],cf_eq.cf_eq_atcoder(1000)['cf_eq_rating']);self.assertEqual(rows[0]['difficultySource'],'CF-EQ · AtCoder Problems估算');self.assertEqual(len(rows),2);self.assertIsNone(rows[1]['difficulty']);self.assertEqual(pending,[])
     def test_nowcoder_score_and_accept_ratio_not_difficulty(self):
         meta={'contestStartTime':1,'contestEndTime':100}
         page='<div data-id="1" data-json="'+json.dumps(meta).replace('"','&quot;')+'"><h4><a>Fixture</a></h4></div>'
         client=Client({'https://ac.nowcoder.com/acm/contest/vip-index':page,'https://ac.nowcoder.com/acm/contest/problem-list?token=&id=1':{'code':0,'data':{'data':[{'index':'C','title':'P','score':200,'acceptedCount':2,'submitCount':100}]}}})
-        rows,pending,_=P.discover_nc(client,NOW);self.assertEqual(rows,[]);self.assertEqual(len(pending),1);self.assertIn('难度',pending[0]['reason'])
+        rows,pending,_=P.discover_nc(client,NOW);self.assertEqual(len(rows),1);self.assertIsNone(rows[0]['difficulty']);self.assertEqual(pending,[])
     def test_nowcoder_partial_only_explicit_profile_fields(self):
         page='<h1 class="profile-name">Fixture</h1><p>Rating: 1200</p>'
         value=P.account_nc(Client({'https://ac.nowcoder.com/acm/contest/profile/1':page}),'1')
@@ -104,6 +104,7 @@ class IntegrationTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.store=Store();self.client=Client();self.service=I.IntegrationService(self.store,self.root,auto_start=False,client=self.client,clock=lambda:NOW);self.store.extensions=self.service;self.store.library=LibraryDatabase(self.root/'library.sqlite3')
     def tearDown(self):self.service.close();self.temp.cleanup()
     def test_strict_filter_dedupe_local_first_and_unknown_pending(self):
+        self.service.configure({"minDifficulty":1000,"maxDifficulty":2199})
         values=[completed_row('A',999),completed_row('B',1000),completed_row('C',2199),completed_row('D',2200)]
         with patch.dict(P.DISCOVERY_ADAPTERS,{'codeforces':lambda *_:(values,[{'reason':'missing'}],'fixture')}):
             result=self.service._catalog('codeforces',{'https://codeforces.com/contest/1/problem/B'})
@@ -114,6 +115,7 @@ class IntegrationTests(unittest.TestCase):
         self.service._account('codeforces');hub=self.service.snapshot()
         self.assertEqual(hub['accounts'][0]['rating'],1500);self.assertEqual(hub['accounts'][0]['solvedCount'],1);self.assertEqual(hub['accounts'][0]['status'],'error');self.assertEqual(len(self.service.rows()),1)
     def test_updated_out_of_scope_rating_preserves_history_row_but_excludes_library(self):
+        self.service.configure({"minDifficulty":1000,"maxDifficulty":2199})
         old=completed_row();self.service.state['rows'][old['id']]=old
         with patch.dict(P.DISCOVERY_ADAPTERS,{'codeforces':lambda *_:([completed_row(difficulty=2300)],[],'official updated')}):self.service._catalog('codeforces',set())
         self.assertEqual(self.service.rows(),[]);self.assertEqual(self.service.row(old['id'])['难度'],'2300')
@@ -122,7 +124,7 @@ class IntegrationTests(unittest.TestCase):
         hub=self.service.configure({'githubRepo':'https://github.com/owner/repo','accounts':{'codeforces':'fixture'},'intervalHours':1})
         self.assertEqual(hub['settings']['githubRepo'],'owner/repo');self.assertEqual(hub['accounts'][0]['handle'],'fixture')
         self.service.configure({'accounts':{'codeforces':''}});self.assertEqual(self.service.snapshot()['accounts'][0]['status'],'unconfigured')
-        for bad in ({'githubRepo':'https://evil.example/a'},{'minDifficulty':999},{'maxDifficulty':2200},{'intervalHours':0},{'accounts':{'luogu':'password?token'}}):
+        for bad in ({'githubRepo':'https://evil.example/a'},{'minDifficulty':-1},{'maxDifficulty':10001},{'intervalHours':0},{'accounts':{'luogu':'password?token'}}):
             with self.subTest(body=bad),self.assertRaises(ServiceError):self.service.configure(bad)
         restored=I.IntegrationService(self.store,self.root,auto_start=False,client=self.client);self.assertEqual(restored.snapshot()['settings']['githubRepo'],'owner/repo');restored.close()
     def test_local_baseline_then_new_solution_notification_no_table_write(self):

@@ -86,6 +86,9 @@ class TrainingService:
               day TEXT NOT NULL, id TEXT NOT NULL, definition TEXT NOT NULL,
               claimed_at TEXT, awarded_xp INTEGER NOT NULL DEFAULT 0, evidence TEXT NOT NULL DEFAULT '[]',
               PRIMARY KEY(day,id));
+            CREATE TABLE IF NOT EXISTS goals (
+              id TEXT PRIMARY KEY, created_at TEXT NOT NULL, config TEXT NOT NULL,
+              archived INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS ranking_profile (
               singleton INTEGER PRIMARY KEY CHECK(singleton=1), user_id TEXT NOT NULL UNIQUE,
               nickname TEXT NOT NULL, auth_token TEXT NOT NULL, endpoint TEXT NOT NULL DEFAULT '',
@@ -93,6 +96,9 @@ class TrainingService:
             CREATE TABLE IF NOT EXISTS ranking_receipts (
               endpoint TEXT NOT NULL, event_id TEXT NOT NULL, accepted_at TEXT NOT NULL,
               PRIMARY KEY(endpoint,event_id));
+            CREATE TABLE IF NOT EXISTS official_pending (
+              id TEXT PRIMARY KEY, session_id TEXT NOT NULL, submission_id TEXT NOT NULL,
+              problem_id TEXT, url TEXT, code TEXT, platform TEXT, accepted_at TEXT);
         """)
         from leaderboard import default_endpoint
         from persistence import load_document,save_document
@@ -108,6 +114,13 @@ class TrainingService:
                                    (str(uuid.uuid4()), "练习者", secrets.token_urlsafe(32), default_endpoint(), iso(self._now())))
         self.assets = assets
         self.judge = judge
+        # Upgraded databases may still cache acceptance derived from local AC.
+        # Replay before any workspace response or leaderboard synchronization.
+        cached = self.connection.execute("SELECT id FROM training WHERE accepted_at IS NOT NULL").fetchall()
+        if cached:
+            with self._write() as connection:
+                for record in cached:
+                    self._recompute_progress(connection, record["id"])
         self.previews = {}
         self.previous_previews = {}
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tb-judge")
@@ -237,6 +250,97 @@ class TrainingService:
                     connection.execute(f"UPDATE training SET active=0,removed_at=? WHERE id IN ({placeholders})", [iso(self._now())] + ids)
             return {"workspace": self.workspace()}
 
+    def clear_training(self):
+        with self.lock:
+            self._expire()
+            if self.active_contest():
+                raise ServiceError(409, "模拟赛正在进行，交卷后才能清空训练")
+            if self.connection.execute("SELECT 1 FROM submissions WHERE finished_at IS NULL").fetchone():
+                raise ServiceError(409, "还有评测任务，请等待结果后清空训练")
+            count=self.connection.execute("SELECT COUNT(*) FROM training WHERE active=1").fetchone()[0]
+            if count:
+                with self._write() as connection:
+                    connection.execute("UPDATE training SET active=0,removed_at=? WHERE active=1",(iso(self._now()),))
+            return {"cleared":count,"workspace":self.workspace()}
+
+    def save_official_pending(self, record):
+        """持久化未完成官方回执，供返回 TB / 重启后恢复查询。"""
+        if not isinstance(record, dict) or not record.get("sessionId"):
+            return False
+        submission_id = str(record.get("submissionId") or "")
+        if not submission_id.isdecimal():
+            return False
+        with self.lock:
+            identity = hashlib.sha256((str(record.get("sessionId")) + ":" + submission_id).encode()).hexdigest()
+            with self._write() as connection:
+                connection.execute("INSERT INTO official_pending(id,session_id,submission_id,problem_id,url,code,platform,accepted_at) "
+                                   "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET accepted_at=excluded.accepted_at",
+                                   (identity, str(record.get("sessionId")), submission_id, record.get("problemId") or "",
+                                    record.get("url") or "", record.get("code") or "", record.get("platform") or "", record.get("acceptedAt") or ""))
+        return True
+
+    def clear_official_pending(self, url=None, code=None):
+        """官方回执已落库后清理对应 pending。"""
+        from insights import canonical_url
+        key = canonical_url(url)
+        with self.lock:
+            rows = self.connection.execute("SELECT id,url FROM official_pending").fetchall()
+            remove = [row["id"] for row in rows if key and canonical_url(row["url"]) == key]
+            if remove:
+                with self._write() as connection:
+                    connection.executemany("DELETE FROM official_pending WHERE id=?", [(item,) for item in remove])
+
+    def official_pending(self, url, code):
+        """返回与本机未完成官方回执对应的会话恢复信息（题目 URL 匹配）。"""
+        from insights import canonical_url
+        key = canonical_url(url)
+        if not key:
+            return []
+        with self.lock:
+            rows = self.connection.execute("SELECT * FROM official_pending").fetchall()
+            result = []
+            for row in rows:
+                if canonical_url(row["url"]) != key:
+                    continue
+                result.append({"id": row["problem_id"], "url": row["url"], "submissionId": row["submission_id"],
+                               "sessionId": row["session_id"], "code": row["code"], "acceptedAt": row["accepted_at"]})
+            return result
+
+    def record_official(self, session, receipt):
+        from insights import canonical_url
+        from urllib.parse import urlsplit
+        remote=str(receipt.get('submissionId') or '')
+        verdict=receipt.get('verdict')
+        if receipt.get('status')!='finished' or not remote.isdecimal() or verdict not in (FAILURES-{'ERROR'})|{'AC'}:
+            return None
+        with self.lock:
+            row=self._row(session['id'])
+            key=canonical_url(session['url'])
+            if not key or canonical_url(row.get('url') or self._asset_library().problem(row['id']).get('url'))!=key:
+                raise ServiceError(409,"官方回执与本题不一致")
+            self.assert_solution_unlocked(row['id'])
+            identity='official-'+hashlib.sha256((str(urlsplit(session['url']).hostname)+'/'+remote).encode()).hexdigest()
+            existing=self.connection.execute('SELECT * FROM submissions WHERE id=?',(identity,)).fetchone()
+            if existing:return self._submission(existing)
+            # 受理时刻：优先用桥冻结的 acceptedAt（原站真正接收提交的时间），
+            # 没有才退回当前时间——这样延迟回执不会把通过挪到收到回执那天。
+            accepted_at = receipt.get('acceptedAt') or session.get('acceptedAt')
+            try:
+                submitted = iso(parse_time(accepted_at)) if accepted_at else iso(self._now())
+            except (ValueError, TypeError, AttributeError):
+                submitted = iso(self._now())
+            finished = iso(self._now())
+            with self._write() as connection:
+                self._activate(connection,row['id'],submitted)
+                # 独立性以“受理时刻是否在看过题解之后”判定：看题解时间早于本次受理 = 看过题解。
+                seen_row=connection.execute('SELECT solution_seen_at FROM training WHERE id=?',(row['id'],)).fetchone()
+                seen_at=seen_row[0] if seen_row else None
+                seen=bool(seen_at and seen_at<submitted)
+                connection.execute("INSERT INTO submissions(id,problem_id,contest_id,mode,code,submitted_at,finished_at,verdict,scope,message,solution_seen) VALUES(?,?,NULL,'submit',?,?,?,?, 'official',?,?)",
+                    (identity,row['id'],self._code(session['code']),submitted,finished,verdict,'原站确认提交 #'+remote,int(seen)))
+                self._recompute_progress(connection,row['id'])
+            return self._submission(self.connection.execute('SELECT * FROM submissions WHERE id=?',(identity,)).fetchone())
+
     def insights(self, hub=None):
         from insights import build_insights
         with self.lock:
@@ -254,9 +358,10 @@ class TrainingService:
                             raise
             value = build_insights(library, records, history, workspace, hub or {}, self._now())
             tasks = self.daily_tasks()
-            claimed = self.connection.execute("SELECT COALESCE(SUM(awarded_xp),0) AS xp,COUNT(*) AS count,MAX(claimed_at) AS latest FROM daily_missions WHERE claimed_at IS NOT NULL").fetchone()
-            from progression import accepted_evidence, extra_achievements, qualified_contests
-            evidence = accepted_evidence(library, records)
+            # 只累加版本 2（官方口径）任务的经验；旧本地任务领取保留在库里但不再计入成长。
+            claimed = self.connection.execute("SELECT COALESCE(SUM(awarded_xp),0) AS xp,COUNT(*) AS count,MAX(claimed_at) AS latest FROM daily_missions WHERE claimed_at IS NOT NULL AND definition LIKE '%\"version\": 2%'").fetchone()
+            from progression import official_reward_evidence, extra_achievements, qualified_contests
+            evidence = official_reward_evidence(library, records, hub or {})
             completed = qualified_contests(workspace["contests"], records)
             claimed_dates = [item["claimed_at"] for item in self.connection.execute("SELECT claimed_at FROM daily_missions WHERE claimed_at IS NOT NULL ORDER BY claimed_at,rowid")]
             value["achievements"].extend(extra_achievements(evidence, records, completed, value["summary"]["longestStreak"], claimed_dates))
@@ -270,10 +375,11 @@ class TrainingService:
             return value
 
     def _evidence(self):
-        from progression import accepted_evidence
+        """官方 AC 唯一证据（成长/每日任务/成就/模拟赛过滤共用）。"""
+        from progression import official_reward_evidence
         rows = self._library()
         known = {row["id"] for row in rows}
-        records = [dict(record) for record in self.connection.execute("SELECT * FROM submissions WHERE mode='submit' AND verdict='AC' AND scope='local' AND finished_at IS NOT NULL ORDER BY submitted_at,rowid")]
+        records = [dict(record) for record in self.connection.execute("SELECT * FROM submissions WHERE mode='submit' AND verdict='AC' AND scope='official' AND finished_at IS NOT NULL ORDER BY submitted_at,rowid")]
         for record in records:
             if record["problem_id"] not in known:
                 try:
@@ -282,16 +388,29 @@ class TrainingService:
                 except Exception as error:
                     if getattr(error, "status", None) != 404:
                         raise
-        return accepted_evidence(rows, records)
+        hub = None
+        extensions = getattr(self.store, "extensions", None)
+        if extensions is not None:
+            snapshot = getattr(extensions, "snapshot", None)
+            if callable(snapshot):
+                hub = snapshot()
+        return official_reward_evidence(rows, records, hub)
 
     def daily_tasks(self):
         from progression import TASKS, SHANGHAI, task_progress
         with self.lock:
             day = self._now().astimezone(SHANGHAI).date().isoformat()
-            if not self.connection.execute("SELECT 1 FROM daily_missions WHERE day=?", (day,)).fetchone():
-                with self._write() as connection:
-                    for task in TASKS:
-                        connection.execute("INSERT OR IGNORE INTO daily_missions(day,id,definition) VALUES(?,?,?)", (day, task["id"], json.dumps(task, ensure_ascii=False)))
+            current = {task["id"]: json.dumps(task, ensure_ascii=False) for task in TASKS}
+            existing = {record["id"]: record for record in self.connection.execute("SELECT * FROM daily_missions WHERE day=?", (day,))}
+            with self._write() as connection:
+                for task in TASKS:
+                    if task["id"] not in existing:
+                        connection.execute("INSERT OR IGNORE INTO daily_missions(day,id,definition) VALUES(?,?,?)", (day, task["id"], current[task["id"]]))
+                    else:
+                        record = existing[task["id"]]
+                        # 未领取的旧定义升级到官方口径；已领取的保留原定义与奖励。
+                        if record["claimed_at"] is None and record["definition"] != current[task["id"]]:
+                            connection.execute("UPDATE daily_missions SET definition=? WHERE day=? AND id=?", (current[task["id"]], day, task["id"]))
             evidence = self._evidence()
             tasks = []
             for record in self.connection.execute("SELECT * FROM daily_missions WHERE day=? ORDER BY rowid", (day,)):
@@ -300,7 +419,7 @@ class TrainingService:
                 task.update(progress=progress, completed=progress >= task["target"], claimed=bool(record["claimed_at"]), claimedAt=record["claimed_at"])
                 tasks.append(task)
             return {"date": day, "timezone": "Asia/Shanghai", "tasks": tasks, "claimable": sum(task["completed"] and not task["claimed"] for task in tasks),
-                    "totalClaimedXp": sum(task["xp"] for task in tasks if task["claimed"]), "notice": "每日按北京时间刷新。只计当天首次本地审核通过；样例、运行及重复通过不计入。"}
+                    "totalClaimedXp": sum(task["xp"] for task in tasks if task["claimed"]), "notice": "每日按北京时间刷新。只计当天首次官方 AC；本地样例、运行、重复通过都不计入。"}
 
     def claim_daily_task(self, identity, date=None):
         from progression import task_progress
@@ -349,16 +468,9 @@ class TrainingService:
         return self.profile()
 
     def _ranking_events(self, endpoint):
-        with self.lock:
-            profile = self._ranking_profile()
-            received = {record["event_id"]: record["accepted_at"] for record in self.connection.execute("SELECT event_id,accepted_at FROM ranking_receipts WHERE endpoint=?", (endpoint,))}
-            events = []
-            for item in self._evidence():
-                identity = hashlib.sha256((profile["user_id"] + ":" + item["problemKey"]).encode()).hexdigest()
-                if received.get(identity) == item["acceptedAt"]:
-                    continue
-                events.append({"eventId": identity, "problemKey": item["problemKey"], "acceptedAt": item["acceptedAt"], "difficulty": item["difficulty"], "scope": "local-reviewed"})
-            return events
+        # 2026-10-10：远端 Worker 只接受旧的 scope=local-reviewed，本地已改为官方 AC 口径。
+        # 不再把官方回执冒标成 local-reviewed 上传；在新官方协议落地前不发任何本地默认上传。
+        return []
 
     def _ranking_receipts(self, endpoint, events):
         with self._write() as connection:
@@ -410,7 +522,7 @@ class TrainingService:
     def _finish_record(self, connection, contest, finished_at):
         connection.execute("UPDATE contests SET status='finished',finished_at=? WHERE id=? AND status='running'", (finished_at, contest["id"]))
         for slot in json.loads(contest["slots"]):
-            solved = connection.execute("SELECT 1 FROM submissions WHERE contest_id=? AND problem_id=? AND mode='submit' AND verdict='AC' AND finished_at IS NOT NULL", (contest["id"], slot["id"])).fetchone()
+            solved = connection.execute("SELECT 1 FROM submissions WHERE contest_id=? AND problem_id=? AND mode='submit' AND scope='local' AND verdict IN ('AC','SAMPLE_PASS') AND finished_at IS NOT NULL", (contest["id"], slot["id"])).fetchone()
             if not solved:
                 connection.execute("UPDATE training SET mock_due=1,mock_due_at=?,mock_due_context=? WHERE id=?", (finished_at, contest["id"], slot["id"]))
 
@@ -468,6 +580,8 @@ class TrainingService:
             if record:
                 with self._write() as connection:
                     connection.execute(f"UPDATE training SET solution_pending=1,solution_seen_at=? WHERE id IN ({placeholders})", [iso(self._now())] + ids)
+                    # 看题解会改变重写队列状态，立即重算该题。
+                    self._recompute_progress(connection, identity)
             else:
                 # Reading a solution before joining still affects independence,
                 # while an inactive history row does not enlarge personal training.
@@ -630,18 +744,18 @@ class TrainingService:
                 scope = "samples"
             if verdict not in VERDICTS or verdict in ("QUEUED", "RUNNING"):
                 verdict = "ERROR"
-            if verdict == "AC" and (scope != "local" or record["mode"] == "run"):
+            # 2026-10-10：本地判题永不产生 AC；AC 只能来自 record_official（原站回执）。
+            if verdict == "AC":
                 verdict = "RUN_OK" if record["mode"] == "run" and not record["sample_run"] else "SAMPLE_PASS"
             case_results = self._case_results(result.get("caseResults", []))
             finished = iso(self._now())
             with self.lock:
                 with self._write() as connection:
                     connection.execute("UPDATE submissions SET finished_at=?,verdict=?,scope=?,time_ms=?,memory_kb=?,passed=?,total=?,output=?,stderr=?,message=?,case_results=? WHERE id=?", (finished, verdict, scope, result.get("timeMs"), result.get("memoryKb"), max(0, int(result.get("passed", 0))), max(0, int(result.get("total", 0))), str(result.get("output", ""))[:262144], str(result.get("stderr", ""))[:262144], str(result.get("message", ""))[:4000], json.dumps(case_results, ensure_ascii=False), identity))
-                    if record["mode"] == "submit" and verdict == "AC":
+                    # 官方 AC 会推进个人进度；模赛提交完成后也要重算以清掉补题标记。
+                    if record["mode"] == "submit" and (verdict == "AC" or record["contest_id"]):
                         self._recompute_progress(connection, record["problem_id"])
                 self._expire()
-            if record["mode"] == "submit" and verdict == "AC" and scope == "local":
-                self.leaderboard.queue_sync()
         except Exception:
             logging.exception("TB submission persistence failed")
             # Persist an explicit terminal failure where possible; never leave a poller hanging.
@@ -655,12 +769,27 @@ class TrainingService:
                 self.cancellations.pop(identity, None)
 
     def _recompute_progress(self, connection, identity):
-        """Replay immutable received submissions, so asynchronous completion order is harmless."""
+        """Replay immutable received submissions, so asynchronous completion order is harmless.
+
+        2026-10-10 口径变更：只有 scope='official' 的 AC 才算通过（本地样例全对
+        只记 SAMPLE_PASS，不是 AC）。旧 local AC 的 accepted_at 派生值在重算时
+        自然消失；原始提交记录永不删除。
+        """
         ids = self._equivalent_ids(identity)
         placeholders = ",".join("?" for _ in ids)
         training_rows = connection.execute(f"SELECT * FROM training WHERE id IN ({placeholders})", ids).fetchall()
-        accepted = connection.execute(f"SELECT * FROM submissions WHERE problem_id IN ({placeholders}) AND mode='submit' AND verdict='AC' AND finished_at IS NOT NULL ORDER BY submitted_at,rowid", ids).fetchall()
-        if not training_rows or not accepted:
+        if not training_rows:
+            return
+        accepted = connection.execute(f"SELECT * FROM submissions WHERE problem_id IN ({placeholders}) AND mode='submit' AND verdict='AC' AND scope='official' AND finished_at IS NOT NULL ORDER BY submitted_at,rowid", ids).fetchall()
+        # 补题标记（mock_due）与 AC 来源无关：模赛里本地全过（含样例通过）也算完成该题。
+        done = connection.execute(f"SELECT submitted_at,contest_id FROM submissions WHERE problem_id IN ({placeholders}) AND mode='submit' AND scope='local' AND verdict IN ('AC','SAMPLE_PASS') AND contest_id IS NOT NULL AND finished_at IS NOT NULL", ids).fetchall()
+        if not accepted:
+            # 没有官方 AC：清掉旧版本写入的本地通过派生值；补题标记仍按模赛完成情况清理。
+            for training in training_rows:
+                mock_due = training["mock_due"]
+                if mock_due and any(row["contest_id"] == training["mock_due_context"] or not training["mock_due_at"] or row["submitted_at"] >= training["mock_due_at"] for row in done):
+                    mock_due = 0
+                connection.execute("UPDATE training SET accepted_at=NULL,review_count=0,rewrite_due=CASE WHEN solution_pending=1 THEN 1 ELSE rewrite_due END,mock_due=? WHERE id=?", (mock_due, training["id"]))
             return
         first, last = accepted[0], accepted[-1]
         cursor, review_at, reviews = first["submitted_at"], None, 0
@@ -669,11 +798,15 @@ class TrainingService:
                 reviews += 1
                 cursor = review_at = submission["submitted_at"]
         for training in training_rows:
-            pending = bool(training["solution_seen_at"] and training["solution_seen_at"] > last["submitted_at"])
+            # 需要独立重写的情形：最近一次 AC 是在看过题解之后提交的，
+            # 或在最近一次 AC 之后才补看了题解。
+            after_ac = bool(training["solution_seen_at"] and training["solution_seen_at"] >= last["submitted_at"])
+            rewrite_due = bool(last["solution_seen"]) or after_ac
             mock_due = training["mock_due"]
-            if mock_due and any(submission["contest_id"] == training["mock_due_context"] or not training["mock_due_at"] or submission["submitted_at"] >= training["mock_due_at"] for submission in accepted):
+            candidates = list(accepted) + list(done)
+            if mock_due and any(row["contest_id"] == training["mock_due_context"] or not training["mock_due_at"] or row["submitted_at"] >= training["mock_due_at"] for row in candidates):
                 mock_due = 0
-            connection.execute("UPDATE training SET accepted_at=?,last_local_at=?,last_review_at=?,review_count=?,rewrite_due=?,solution_pending=?,mock_due=? WHERE id=?", (first["submitted_at"], last["submitted_at"], review_at, reviews, last["solution_seen"], int(pending), mock_due, training["id"]))
+            connection.execute("UPDATE training SET accepted_at=?,last_local_at=?,last_review_at=?,review_count=?,rewrite_due=?,solution_pending=?,mock_due=? WHERE id=?", (first["submitted_at"], last["submitted_at"], review_at, reviews, int(rewrite_due), int(rewrite_due), mock_due, training["id"]))
 
     @staticmethod
     def _case_results(values):
@@ -774,11 +907,16 @@ class TrainingService:
             if not isinstance(value, bool):
                 raise ServiceError(400, "模拟赛筛选选项须为布尔值")
             switches[key] = value
-        return {"strategy": strategy, "tags": tags, "platform": platform.strip(), **switches}
+        from contest_rules import rules
+        return {"strategy": strategy, "tags": tags, "platform": platform.strip(), **switches, **rules(body)}
 
     def _solved_problem_keys(self, rows):
+        # 2026-10-10：已解 = 官方 AC（含 hub 同步）。本地样例通过不算已解。
         from insights import canonical_url
         accepted = {item["key"] for item in self._evidence()}
+        by_id={row['id']:row for row in rows}
+        for item in self.connection.execute("SELECT problem_id FROM submissions WHERE mode='submit' AND verdict='AC' AND scope='official' AND finished_at IS NOT NULL"):
+            accepted.add(canonical_url(by_id.get(item['problem_id'],{}).get('url')) or item['problem_id'])
         extensions = getattr(self.store, "extensions", None)
         if extensions is not None:
             snapshot = getattr(extensions, "snapshot", None)
@@ -805,15 +943,17 @@ class TrainingService:
         return not options["reviewedOnly"] or row.get("judgeScope") == "local"
 
     def preview_contest(self, body):
+        if isinstance(body,dict) and body.get('mode')=='replay':
+            return self.preview_replay(body)
         options = self._contest_options(body)
         try:
             count = 1 if options["strategy"] == "single" else int(body.get("count", 6))
-            duration = int(body.get("duration", 120))
-            lower, upper = int(body.get("min", 1000)), int(body.get("max", 2100))
+            duration = int(body.get("duration", 300 if options['rules']=='xcpc' else 120))
+            lower, upper = int(body.get("min", 0)), int(body.get("max", 10000))
         except (ValueError, TypeError, AttributeError):
             raise ServiceError(400, "模拟赛参数无效")
-        if not 1 <= count <= 10 or not 1 <= duration <= 360 or not 0 <= lower <= upper <= 5000:
-            raise ServiceError(400, "题数须为 1–10，时长须为 1–360 分钟，难度上下限须有效")
+        if not 1 <= count <= 20 or not 1 <= duration <= 1440 or not 0 <= lower <= upper <= 10000:
+            raise ServiceError(400, "题数须为 1–20，时长须为 1–1440 分钟，难度上下限须有效")
         with self.lock:
             rows = self._library()
             active = {record["id"]: bool(record["accepted_at"]) for record in self.connection.execute("SELECT id,accepted_at FROM training WHERE active=1")}
@@ -865,7 +1005,7 @@ class TrainingService:
             for family in ("dp", "graph", "basic"):
                 if family not in required or any(family in families(row) for row in chosen):
                     continue
-                options = []
+                replacements = []
                 for replacement in pool:
                     if replacement in chosen or family not in families(replacement) or replacement.get("judgeScope") != "local":
                         continue
@@ -876,9 +1016,9 @@ class TrainingService:
                         protected = required & set().union(*(families(row) for row in chosen))
                         if not protected <= set().union(*(families(row) for row in alternate)):
                             continue
-                        options.append((int(abs(replacement["difficulty"] - current["difficulty"]) / band_width), random_rank[replacement["id"]], index, replacement))
-                if options:
-                    _, _, index, replacement = min(options, key=lambda option: option[:3])
+                        replacements.append((int(abs(replacement["difficulty"] - current["difficulty"]) / band_width), random_rank[replacement["id"]], index, replacement))
+                if replacements:
+                    _, _, index, replacement = min(replacements, key=lambda option: option[:3])
                     chosen[index] = replacement
             chosen.sort(key=lambda row: (row["difficulty"], row["id"]))
             preview_key = (count, duration, lower, upper, json.dumps(options, sort_keys=True, ensure_ascii=False))
@@ -913,10 +1053,46 @@ class TrainingService:
                 self.previews.pop(next(iter(self.previews)))
             return {"plan": plan, "available": available}
 
+    def replay_events(self):
+        from contest_rules import event_info
+        with self.lock:
+            groups={}
+            for row in self._library():groups.setdefault(row['contest'],[]).append(row)
+            result=[event_info(name,rows) for name,rows in groups.items()]
+            return {'events':result}
+
+    def preview_replay(self, body):
+        from contest_rules import event_info, rules
+        import re
+        name=body.get('contest')
+        if not isinstance(name,str) or not name:raise ServiceError(400,'请选择已收录比赛')
+        with self.lock:
+            rows=[row for row in self._library() if row['contest']==name]
+            if not rows:raise ServiceError(404,'这场比赛尚未收录')
+            info=event_info(name,rows)
+            if info['complete'] is False:raise ServiceError(422,'这场比赛题单尚不完整，请先收录剩余赛题')
+            def order(row):
+                return tuple((0,int(piece)) if piece.isdecimal() else (1,piece.upper()) for piece in re.findall(r'\d+|\D+',row['problem']))
+            rows.sort(key=order)
+        # Load missing public statements before freezing; never silently omit a slot.
+        for row in rows:self._asset_library().problem(row['id'])
+        available={row['id']:row for row in self._asset_library().candidates(rows)}
+        missing=[row['problem'] for row in rows if row['id'] not in available]
+        if missing:raise ServiceError(422,'以下题目尚缺完整题面或样例：'+', '.join(missing)+'。补全后才能重现整场已收录赛题')
+        try:duration=int(body.get('duration',info['duration']))
+        except (ValueError,TypeError):raise ServiceError(400,'重现赛时长无效')
+        if not 1<=duration<=1440:raise ServiceError(400,'时长须为 1–1440 分钟')
+        options={'strategy':'replay','contest':name,'tags':[],'platform':'','excludeSolved':False,'reviewedOnly':False,**rules({'rules':info['rules'],**body})}
+        slots=[{'letter':row['problem'],'id':row['id'],'title':row['title'],'difficulty':row.get('difficulty'),'tags':row.get('tags',[]),'judgeScope':available[row['id']]['judgeScope']} for row in rows]
+        plan={'previewId':uuid.uuid4().hex,'name':'重现赛 · '+name,'slots':[{key:slot[key] for key in ('letter','id','title','judgeScope')} for slot in slots],
+              'duration':duration,'min':0,'max':10000,'strategy':'replay','constraints':options,'event':info}
+        with self.lock:self.previews[tuple(slot['id'] for slot in slots)]={'plan':plan,'slots':slots,'at':self._now()}
+        return {'plan':plan,'available':len(slots)}
+
     def start_contest(self, body):
         ids = body.get("ids")
-        if not isinstance(ids, list) or not ids or len(ids) > 10 or not all(isinstance(identity, str) for identity in ids) or len(set(ids)) != len(ids):
-            raise ServiceError(400, "请选择 1–10 道不重复的模拟赛题目")
+        if not isinstance(ids, list) or not ids or len(ids) > 100 or not all(isinstance(identity, str) for identity in ids) or len(set(ids)) != len(ids):
+            raise ServiceError(400, "请选择 1–100 道不重复的模拟赛题目")
         try:
             duration = int(body.get("duration", 120))
         except (ValueError, TypeError):
@@ -931,7 +1107,9 @@ class TrainingService:
             if "previewId" in body and body["previewId"] != preview["plan"]["previewId"]:
                 raise ServiceError(409, "选题预览已更新，请使用当前预览")
             options = preview["plan"]["constraints"]
-            if any(key in body for key in ("strategy", "mode", "tags", "topic", "platform", "excludeSolved", "reviewedOnly")):
+            if options['strategy']=='replay' and any(key in body for key in ('strategy','mode','contest','rules','wrongPenalty','compilePenalty')):
+                if any(body[key]!=options.get('strategy' if key=='mode' else key) for key in body if key in options or key=='mode'):raise ServiceError(409,'重现赛条件已变化，请重新预览')
+            elif any(key in body for key in ("strategy", "mode", "tags", "topic", "platform", "excludeSolved", "reviewedOnly","rules","wrongPenalty","compilePenalty")):
                 requested_body = {**options, **body}
                 if "mode" in body and "strategy" not in body:
                     requested_body["strategy"] = body["mode"]
@@ -951,7 +1129,7 @@ class TrainingService:
                 row = current_rows.get(identity)
                 if row is None:
                     raise ServiceError(409, "原题面或评测资料已变化，请重新生成题目")
-                if not self._eligible_contest_row(row, options, preview["plan"]["min"], preview["plan"]["max"], solved):
+                if options['strategy']!='replay' and not self._eligible_contest_row(row, options, preview["plan"]["min"], preview["plan"]["max"], solved):
                     raise ServiceError(409, "题目资料或通过状态已变化，请重新生成题目")
             name = body.get("name") or preview["plan"]["name"]
             if not isinstance(name, str) or len(name) > 100:
@@ -973,17 +1151,23 @@ class TrainingService:
         for submission in records:
             by_problem.setdefault(submission["problem_id"], []).append(submission)
         slots, penalty = [], 0
+        config = json.loads(record["config"] or "{}")
         for frozen in json.loads(record["slots"]):
             attempts = by_problem.get(frozen["id"], [])
-            accepted = next((submission for submission in attempts if submission["finished_at"] and submission["verdict"] == "AC"), None)
+            # 2026-10-10：赛中以本地判题为准（赛中不开放官方提交）。本场“通过”指本地审核题
+            # 全部用例通过（scope=local），属模赛内部成绩，不叫本地 AC、不发主经验、不改个人进度；
+            # 纯样例题（scope=samples）全对只记样例通过，不计本场通过。
+            accepted = next((submission for submission in attempts if submission["finished_at"] and submission["scope"] == "local" and submission["verdict"] in ("AC", "SAMPLE_PASS")), None)
             latest = attempts[-1] if attempts else None
-            slot = {"letter": frozen["letter"], "id": frozen["id"], "title": frozen["title"], "accepted": accepted is not None, "verdict": latest["verdict"] if latest else None, "samplePassed": any(submission["verdict"] == "SAMPLE_PASS" for submission in attempts), "attempts": len(attempts), "solvedAt": accepted["submitted_at"] if accepted else None}
+            sample_ok = accepted is not None or any(submission["finished_at"] and submission["verdict"] == "SAMPLE_PASS" for submission in attempts)
+            slot = {"letter": frozen["letter"], "id": frozen["id"], "title": frozen["title"], "accepted": accepted is not None, "samplePassed": sample_ok, "verdict": latest["verdict"] if latest else None, "attempts": len(attempts), "solvedAt": accepted["submitted_at"] if accepted else None}
             if record["status"] == "finished":
                 slot.update({key: frozen[key] for key in ("difficulty", "tags", "judgeScope")})
             if accepted:
                 minutes = int((parse_time(accepted["submitted_at"]) - parse_time(record["started_at"])).total_seconds() // 60)
-                failures = sum(submission["verdict"] in (FAILURES - {"CE", "ERROR"}) for submission in attempts[:attempts.index(accepted)])
-                penalty += max(0, minutes) + 20 * failures
+                penalized = FAILURES - {'ERROR'} - (set() if config.get('compilePenalty',False) else {'CE'})
+                failures = sum(submission["verdict"] in penalized for submission in attempts[:attempts.index(accepted)])
+                penalty += max(0, minutes) + config.get('wrongPenalty',20) * failures
             slots.append(slot)
         until = parse_time(record["finished_at"] or record["deadline"])
         elapsed = max(0, int((min(self._now(), until) - parse_time(record["started_at"])).total_seconds()))
@@ -1022,7 +1206,8 @@ class TrainingService:
                 attempts = grouped.get(canonical, [])
                 completed = [submission for submission in attempts if submission["finished_at"]]
                 latest = completed[-1] if completed else None
-                accepted_at = next((submission["submitted_at"] for submission in completed if submission["verdict"] == "AC"), record["accepted_at"])
+                # 只有官方 AC 才算通过；record["accepted_at"] 由 _recompute_progress 保证已按官方口径清理。
+                accepted_at = next((submission["submitted_at"] for submission in completed if submission["verdict"] == "AC" and submission["scope"] == "official"), record["accepted_at"])
                 accepted = bool(accepted_at)
                 queue = None
                 if canonical not in locked:
@@ -1046,7 +1231,8 @@ class TrainingService:
                             raise
                 item = dict(source or {"id": record["id"], "title": record["id"], "contest": "", "problem": "", "difficulty": None, "tags": [], "knowledge": "", "platform": ""})
                 last_attempt = attempts[-1] if attempts else None
-                item.update({"id": canonical, "accepted": accepted, "verdict": last_attempt["verdict"] if last_attempt else None, "scope": "local" if accepted else last_attempt["scope"] if last_attempt else None, "attempts": len(attempts), "acceptedAt": accepted_at, "lastSubmittedAt": attempts[-1]["submitted_at"] if attempts else None, "queue": queue, "reviewCount": record["review_count"], "solutionSeen": bool(record["solution_pending"] or record["rewrite_due"]), "activeAt": record["active_at"]})
+                accepted_scope = ('official' if any(submission['scope']=='official' and submission['verdict']=='AC' for submission in completed) else 'local') if accepted else None
+                item.update({"id": canonical, "accepted": accepted, "verdict": last_attempt["verdict"] if last_attempt else None, "scope": accepted_scope if accepted else last_attempt["scope"] if last_attempt else None, "attempts": len(attempts), "acceptedAt": accepted_at, "lastSubmittedAt": attempts[-1]["submitted_at"] if attempts else None, "queue": queue, "reviewCount": record["review_count"], "solutionSeen": bool(record["solution_pending"] or record["rewrite_due"]), "activeAt": record["active_at"]})
                 if canonical in locked:
                     item.update({"difficulty": None, "tags": [], "knowledge": ""})
                 training.append(item)

@@ -18,6 +18,7 @@ class DailyMissionTests(unittest.TestCase):
     setUp = fixtures.ServiceTests.setUp
     tearDown = fixtures.ServiceTests.tearDown
     completed = fixtures.ServiceTests.completed
+    accept = fixtures.ServiceTests.accept
 
     def test_actual_unique_passes_only_and_atomic_idempotent_claim(self):
         self.completed(mode="run")
@@ -25,7 +26,8 @@ class DailyMissionTests(unittest.TestCase):
         self.completed(code="WA")
         self.assertTrue(all(task["progress"] == 0 for task in self.service.daily_tasks()["tasks"]))
         with self.assertRaises(ServiceError): self.service.claim_daily_task("solve-1")
-        self.completed()
+        self.service.start_training("fixture::A")
+        self.accept()
         before = self.service.insights()["growth"]["xp"]
         with ThreadPoolExecutor(max_workers=8) as workers:
             results = list(workers.map(lambda _: self.service.claim_daily_task("solve-1"), range(8)))
@@ -38,7 +40,8 @@ class DailyMissionTests(unittest.TestCase):
 
     def test_harder_tasks_award_more_and_same_problem_cannot_replay_next_day(self):
         self.library.rows[0]["difficulty"] = 2100
-        self.completed()
+        self.service.start_training("fixture::A")
+        self.accept()
         tasks = {task["id"]: task for task in self.service.daily_tasks()["tasks"]}
         self.assertLess(tasks["solve-1"]["xp"], tasks["hard-1500"]["xp"])
         self.assertLess(tasks["hard-1500"]["xp"], tasks["hard-1800"]["xp"])
@@ -47,7 +50,8 @@ class DailyMissionTests(unittest.TestCase):
             self.service.claim_daily_task(identity)
         self.assertEqual(self.service.insights()["growth"]["missionXp"], 435)
         self.clock.advance(days=1)
-        self.completed(code="AC replay")
+        self.accept(submission_id=7777)
+        # 同题隔天再次官方 AC 不算新完成，任务进度仍为 0。
         self.assertTrue(all(task["progress"] == 0 for task in self.service.daily_tasks()["tasks"]))
         self.assertEqual(self.service.insights()["growth"]["missionXp"], 435)
         with self.assertRaises(ServiceError): self.service.claim_daily_task("solve-1", "2026-10-08")
@@ -57,11 +61,14 @@ class DailyMissionTests(unittest.TestCase):
         self.library.rows[0]["url"] = url
         self.library.rows[1]["url"] = "https://codeforces.com/problemset/problem/123/A"
         self.clock.value = dt.datetime(2026, 10, 8, 15, 59, tzinfo=UTC)
-        self.completed()
-        self.completed("fixture::B")
+        self.service.start_training("fixture::A")
+        self.accept()
+        self.service.start_training("fixture::B")
+        self.accept("fixture::B", submission_id=7901)
         self.service.remove_training("fixture::A")
         self.assertEqual(self.service.daily_tasks()["tasks"][1]["progress"], 1)
-        self.assertEqual(len(self.service._ranking_events("fixture")), 1)
+        # 排行榜默认协议已停用，不再产生旧 local-reviewed 事件。
+        self.assertEqual(len(self.service._ranking_events("fixture")), 0)
         self.clock.advance(minutes=2)
         self.assertEqual(self.service.daily_tasks()["date"], "2026-10-09")
         self.assertEqual(self.service.daily_tasks()["tasks"][0]["progress"], 0)
@@ -110,6 +117,7 @@ class MockOptionsTests(unittest.TestCase):
     setUp = fixtures.ServiceTests.setUp
     tearDown = fixtures.ServiceTests.tearDown
     completed = fixtures.ServiceTests.completed
+    accept = fixtures.ServiceTests.accept
 
     def test_topic_plateau_and_blind_preview_freeze(self):
         for row in self.library.rows:
@@ -132,11 +140,16 @@ class MockOptionsTests(unittest.TestCase):
     def test_solved_original_excluded_even_removed_alias_and_changes_reject_start(self):
         self.library.rows[0]["url"] = "https://codeforces.com/contest/123/problem/A"
         self.library.rows[1]["url"] = "https://codeforces.com/problemset/problem/123/A"
-        self.completed(); self.service.remove_training("fixture::A")
+        self.service.start_training("fixture::A")
+        self.accept()
+        self.service.remove_training("fixture::A")
         plan = self.service.preview_contest({"count": 3, "excludeSolved": True})["plan"]
+        # 同题的两个 URL 写法都算已解，排除已解题时都不出现。
         self.assertNotIn("fixture::A", [slot["id"] for slot in plan["slots"]])
         self.assertNotIn("fixture::B", [slot["id"] for slot in plan["slots"]])
-        self.completed(plan["slots"][0]["id"])
+        # 选好题后其中一题变成已解（官方 AC）：开赛应检出错位并拒绝。
+        self.service.start_training(plan["slots"][0]["id"])
+        self.accept(plan["slots"][0]["id"], submission_id=8888)
         with self.assertRaises(ServiceError): self.service.start_contest({"ids": [slot["id"] for slot in plan["slots"]], "duration": 120, "previewId": plan["previewId"]})
 
     def test_strict_platform_tags_reviewed_filter_and_invalid_options(self):
@@ -153,6 +166,7 @@ class IdentityAndClientTests(unittest.TestCase):
     setUp = fixtures.ServiceTests.setUp
     tearDown = fixtures.ServiceTests.tearDown
     completed = fixtures.ServiceTests.completed
+    accept = fixtures.ServiceTests.accept
 
     def test_uuid_private_token_persist_and_other_install_differs(self):
         profile = self.service.profile()
@@ -179,17 +193,20 @@ class IdentityAndClientTests(unittest.TestCase):
             if not line: self.fail("Worker fixture did not start: " + process.stderr.read())
             endpoint = json.loads(line)["endpoint"]
             self.service.configure_profile({"nickname": "协议测试", "endpoint": endpoint})
-            self.completed()
+            self.service.start_training("fixture::A")
+            self.accept()
             self.completed("fixture::H")
             self.completed(mode="run")
             until = time.monotonic() + 15
             result = None
             while time.monotonic() < until:
                 result = self.service.leaderboard.rankings("total")
-                if result["status"] == "ready" and result.get("self", {}).get("count") == 1: break
+                if result["status"] == "ready": break
                 if result["status"] == "error": self.fail(result["error"])
                 time.sleep(.02)
-            self.assertEqual(result["self"]["count"], 1)
+            # 2026-10-10：默认旧 local-reviewed 榜协议停用，本地不再上传事件；
+            # 服务仍连通、元数据隔离仍成立，只是 self.count 为 0。
+            self.assertEqual(result["self"]["count"], 0)
             self.assertEqual(result["self"]["nickname"], "协议测试")
             self.assertEqual(self.service._ranking_events(endpoint), [])
             self.service.configure_profile({"nickname": "新的昵称"})

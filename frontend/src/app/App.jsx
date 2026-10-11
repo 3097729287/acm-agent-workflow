@@ -62,7 +62,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import Workbench from "./Workbench.jsx";
 import { LecturesPanel, LectureDisclosure } from "@/pages/LecturesPanel.jsx";
-import { difficultyBand, solutionBlocks } from "@/lib/practiceMetadata.js";
+import { difficultyBand, solutionBlocks, briefSolution } from "@/lib/practiceMetadata.js";
 import {
   GrowthPage,
   ActivityPage,
@@ -75,7 +75,8 @@ import {
 import { organizeCategories } from "@/models/model.js";
 import NavigationSettings, { orderedPages } from "@/pages/NavigationSettings.jsx";
 import RankingsPage, { ProfileSettings } from "@/pages/CommunityPanel.jsx";
-import MockSetup from "./MockSetup.jsx";
+import MockSetup from "@/app/MockSetup.jsx";
+import GoalsPanel, { GoalReminder } from '@/pages/GoalsPanel.jsx';
 import SubmissionRecords, { MockHistory } from "@/pages/SubmissionRecords.jsx";
 import { normalizeMarkdown } from "@/lib/normalizeMarkdown.js";
 import {
@@ -101,6 +102,7 @@ const PAGES = [
   { id: "records", label: "提交记录", icon: History, key: "6" },
   { id: "growth", label: "成长与能力", icon: ChartNoAxesCombined, key: "7" },
   { id: "activity", label: "活动记录", icon: Activity, key: "8" },
+  { id: "goals", label: "目标计划", icon: Target, key: "" },
   { id: "lectures", label: "从零讲", icon: BookOpen, key: "9" },
   { id: "rankings", label: "排行榜", icon: ListOrdered, key: "" },
 ];
@@ -117,8 +119,8 @@ const DEFAULTS = {
   navOrder: ["mine", "today", "library", "lectures", "competitions", "mock", "records", "growth", "activity", "rankings"],
   navLabels: {},
   navGroups: {},
-  pageBookmarks: [],
   seenAchievements: [],
+  fullscreen: false,
 };
 function readPreferences() {
   try {
@@ -171,12 +173,12 @@ function Empty({ icon: Icon = Search, title, description, children }) {
     </div>
   );
 }
-function Verdict({ value, accepted = false }) {
+function Verdict({ value, accepted = false, scope }) {
   const current = value || (accepted ? "AC" : null);
   return (
     <span className={"verdict " + verdictTone(current)}>
       <span />
-      {verdictLabel(current)}
+      {current === 'AC' && scope === 'official' ? '官方 AC' : verdictLabel(current)}
       {accepted && current !== "AC" && (
         <Check
           size={11}
@@ -402,8 +404,7 @@ function KnowledgeTree({
   }
   return (
     <div className="knowledge-tree-shell">
-    <label className="knowledge-search"><Search size={14} /><input aria-label={large ? "搜索完整知识清单" : "搜索知识清单"} placeholder="搜索知识点" value={query} onChange={event => setQuery(event.target.value)} />{query && <button aria-label="清空知识清单搜索" onClick={() => setQuery("")}><X size={13} /></button>}</label>
-    <div className="knowledge-tree-tools"><button onClick={expandAll}>展开全部</button><button onClick={() => { setExpanded(new Set()); setQuery(""); }}>收起全部</button><span>{items.length} 项</span></div>
+    {large && <><label className="knowledge-search"><Search size={14} /><input aria-label="搜索完整知识清单" placeholder="搜索知识点" value={query} onChange={event => setQuery(event.target.value)} />{query && <button aria-label="清空知识清单搜索" onClick={() => setQuery("")}><X size={13} /></button>}</label><div className="knowledge-tree-tools"><button onClick={expandAll}>展开全部</button><button onClick={() => { setExpanded(new Set()); setQuery(""); }}>收起全部</button><span>{items.length} 项</span></div></>}
     <div
       className={"knowledge-tree " + (large ? "tree-large" : "")}
       role="tree"
@@ -611,6 +612,28 @@ export default function App() {
       `${Math.min(18, Math.max(13, Number(prefs.fontSize) || 15))}px`,
     );
   }, [prefs]);
+  // 桌面全屏：浏览器测试环境没有原生窗口，available=false 时设置项禁用。
+  const [display, setDisplay] = useState({ available: false, fullscreen: false });
+  const applyFullscreen = useCallback(async (value) => {
+    try {
+      const answer = await api("desktop/fullscreen", { fullscreen: !!value });
+      setDisplay({ available: !!answer.available, fullscreen: !!answer.fullscreen });
+    } catch { /* 浏览器里没有原生窗口，忽略。 */ }
+  }, [api]);
+  useEffect(() => {
+    let alive = true;
+    api("desktop/fullscreen")
+      .then(answer => { if (alive && answer && typeof answer.available === "boolean") setDisplay({ available: !!answer.available, fullscreen: !!answer.fullscreen }); })
+      .catch(() => {});
+    const onKey = (event) => {
+      if (event.key === "F11" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        setDisplay(previous => { if (previous.available) applyFullscreen(!previous.fullscreen); return previous; });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => { alive = false; window.removeEventListener("keydown", onKey); };
+  }, [api, applyFullscreen]);
   useEffect(() => {
     const tick = setInterval(
       () => setNow(Date.now() + serverOffset.current),
@@ -1147,7 +1170,8 @@ export default function App() {
       if (control && /^[1-9]$/.test(e.key)) {
         e.preventDefault();
         e.stopPropagation();
-        go(PAGES[Number(e.key) - 1].id);
+        const target = PAGES.find(item => item.key === e.key);
+        if (target) go(target.id);
         return;
       }
       if (control && [",", "0"].includes(e.key)) {
@@ -1383,7 +1407,7 @@ export default function App() {
           <Difficulty value={row.difficulty} />
         </td>
         <td>
-          <Verdict value={row.verdict} accepted={row.accepted} />
+          <Verdict scope={row.scope} value={row.verdict} accepted={row.accepted} />
         </td>
         <td className="last-date">
           {row.lastSubmittedAt
@@ -1618,6 +1642,7 @@ export default function App() {
             </>
           )}
           <span className="toolbar-count">{visible.length} 题</span>
+          {page === 'mine' && <button className="secondary" aria-label="清空我的训练" disabled={busy || !mine.length || !!active || !!workspace.summary.pending} onClick={() => setDialog('clear-training')}><MinusCircle size={15} />一键清空</button>}
         </div>
         {today ? (
           <div className="filter-tabs">
@@ -2027,6 +2052,15 @@ export default function App() {
               ))}
             </div>
           </div>
+          <div className="settings-row">
+            <div>
+              <strong>全屏</strong>
+              <small>{display.available ? "按 F11 或在此切换整窗全屏" : "仅桌面版可用"}</small>
+            </div>
+            <label className="toggle-label">
+              <input className="toggle" aria-label="全屏" type="checkbox" checked={display.fullscreen} disabled={!display.available} onChange={(event) => applyFullscreen(event.target.checked)} />
+            </label>
+          </div>
           {[
             { id: "compact", title: "紧凑列表", desc: "在同一屏显示更多题目" },
             {
@@ -2057,7 +2091,7 @@ export default function App() {
             </label>
           ))}
         </section>
-        {settingsTab === "appearance" && <NavigationSettings pages={PAGES} prefs={prefs} setPrefs={setPrefs} onOpen={go} />}
+        {settingsTab === "appearance" && <NavigationSettings pages={PAGES} prefs={prefs} setPrefs={setPrefs} />}
         <section hidden={settingsTab !== "training"}>
           <h2>训练与评测</h2>
           <div className="settings-information">
@@ -2065,13 +2099,13 @@ export default function App() {
               个人进度只统计主动加入或提交的题，同题只计一次。取消训练保留代码和历史，重新加入可恢复。
             </p>
             <p>
-              <strong>本地 AC</strong>：通过已审核的本地测试。
+              <strong>官方 AC</strong>：在四个竞赛网站原站通过才算，并按难度积累经验。
               <strong>样例通过</strong>
-              ：通过题面样例，单独统计。比赛结束后可以查阅题解、重练未完成的题。
+              ：本地测试全对也只叫样例通过，不等于 AC。比赛结束后可以查阅题解、重练未完成的题。
             </p>
             <p>
-              看过题解后完成的题会进入“独立重写”；独立通过后按 7 天 / 30
-              天安排复习。提交结果会保留，练习失败不会抹去以前的 AC。
+              看过题解后完成的题会进入“独立重写”；独立官方 AC 后按 7 天 / 30
+              天安排复习。提交结果会保留，练习失败不会抹去以前的官方 AC。
             </p>
           </div>
         </section>
@@ -2147,6 +2181,7 @@ export default function App() {
   const currentPage = navigationPages.find((p) => p.id === page),
     currentMockSlot =
       active?.slots.find((slot) => slot.id === mockSlot) || active?.slots[0];
+  const conciseSolution = reader && briefSolution(reader.markdown, rows.find(row => row.id === readerId)?.difficulty);
   const readerPanel = readerId && (
     <aside
       className={"reader-panel " + (readerFull ? "reader-full" : "")}
@@ -2213,7 +2248,8 @@ export default function App() {
       <div className="reader-content">
         {reader ? (
           <>
-            {solutionBlocks(reader.markdown, reader.lectures || []).map((block, index) => block.type === "lecture" ? <LectureDisclosure key={index} lecture={block.lecture || {title: block.heading}} inlineMarkdown={block.markdown} api={api} onTrain={openPractice} onError={(message) => notice(message, "error")} /> : <Markdown key={index} text={block.markdown} images={reader.images} onCopy={copy} />)}
+            {conciseSolution && <div className="concise-solution"><p className="progress-small">入门题简明阅读 · 思路提要与完整代码</p><Markdown text={conciseSolution} images={reader.images} onCopy={copy} /></div>}
+            <details className="solution-full" open={!conciseSolution} key={readerId}><summary style={conciseSolution ? undefined : {display: 'none'}}>查看完整题解与推导</summary>{solutionBlocks(reader.markdown, reader.lectures || []).map((block, index) => block.type === "lecture" ? <LectureDisclosure key={index} lecture={block.lecture || {title: block.heading}} inlineMarkdown={block.markdown} api={api} onTrain={openPractice} onError={(message) => notice(message, "error")} /> : <Markdown key={index} text={block.markdown} images={reader.images} onCopy={copy} />)}</details>
             {!!reader.lectures?.length && <div className="reader-lecture-references"><h3>本题的基础讲解与引用</h3>{reader.lectures.filter(item => !solutionBlocks(reader.markdown, reader.lectures).some(block => block.lecture?.id === item.id)).map(item => <LectureDisclosure key={item.id} lecture={item} api={api} onTrain={openPractice} onError={(message) => notice(message, "error")} />)}<button className="text-button" onClick={() => go("lectures")}>查看全部知识讲解 <ArrowUpRight size={13} /></button></div>}
           </>
         ) : readerError ? (
@@ -2276,25 +2312,9 @@ export default function App() {
               )}
             </button>
           ))}
-          {!prefs.collapsed && (prefs.pageBookmarks || []).filter(item => PAGES.some(page => page.id === item.page)).slice(0, 6).map(item => <button className="nav-item nav-bookmark" key={item.id} onClick={() => go(item.page)} aria-label={`书签 ${item.name}`}><BookmarkPlus size={16} /><span>{item.name}</span></button>)}
         </nav>
         {!prefs.collapsed && (
           <div className="sidebar-knowledge">
-            <div className="sidebar-section-title">
-              <span>知识清单</span>
-              <button
-                aria-label="聚焦知识清单"
-                onClick={() =>
-                  document
-                    .querySelector(
-                      '.sidebar-tree-scroll [role="treeitem"][tabindex="0"]',
-                    )
-                    ?.focus()
-                }
-              >
-                <ArrowUpRight size={13} />
-              </button>
-            </div>
             <div className="sidebar-tree-scroll">
               <KnowledgeTree
                 nodes={categories}
@@ -2354,6 +2374,7 @@ export default function App() {
             {practiceId && <span className="practice-label">单题练习</span>}
           </div>
           <div className="topbar-actions">
+            <GoalReminder api={api} onOpen={() => go("goals")} />
             {active && page !== "mock" && (
               <button className="live-contest" onClick={() => go("mock")}>
                 <Clock size={14} />
@@ -2426,7 +2447,7 @@ export default function App() {
               onNext={nextPractice}
             />
           ) : ["mine", "library", "today"].includes(page) ? (
-            renderListPage()
+            page === 'today' ? <div className="today-workspace"><GoalsPanel api={api} onTrain={openPractice} dailyOnly />{renderListPage()}</div> : renderListPage()
           ) : page === "mock" ? (
             <div className="mock-page"><div className="mock-page-tabs filter-tabs" role="tablist" aria-label="模拟赛页面"><button role="tab" aria-selected={mockTab === "create" && !record} className={mockTab === "create" && !record ? "active" : ""} onClick={() => { setMockTab("create"); setRecord(null); }}>{active ? "进行中的比赛" : "创建训练"}</button><button role="tab" aria-selected={mockTab === "history" || !!record} className={mockTab === "history" || record ? "active" : ""} onClick={() => { setMockTab("history"); setRecord(null); }}>模拟赛记录 <small>{workspace.contests.length}</small></button></div>{record ? recordDetail() : mockTab === "history" ? <MockHistory contests={workspace.contests} onSelect={openRecord} onResume={(contest) => { setMockTab("create"); setMockSlot(contest.slots[0]?.id); }} onCreate={() => setMockTab("create")} /> : active ? (
               <div className="contest-player">
@@ -2550,6 +2571,8 @@ export default function App() {
               onAchievements={openAchievements}
               onClaimTask={async (id, date) => { try { await api("daily-tasks/claim", { id, date }); setInsights(await api("insights")); notice("每日任务经验已领取", "success"); } catch (issue) { notice(issue.message, "error"); throw issue; } }}
             />
+          ) : page === "goals" ? (
+            <GoalsPanel api={api} onTrain={openPractice} />
           ) : page === "activity" ? (
             <ActivityPage insights={insights} onTrain={openPractice} />
           ) : page === "lectures" ? (
@@ -2647,6 +2670,7 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {dialog === 'clear-training' && <Modal title="清空我的训练" onClose={() => setDialog(null)} footer={<><button className="secondary" onClick={() => setDialog(null)}>取消</button><button className="primary" disabled={busy || !!active} onClick={async () => { setBusy(true); try { const result = await api('training/clear', {}); applyWorkspace(result.workspace); setDialog(null); notice(`已清空 ${result.cleared} 道训练题，代码与提交记录已保留`, 'success'); } catch (issue) { notice(issue.message, 'error'); } finally { setBusy(false); } }}>确认清空 {mine.length} 道训练题</button></>}><p>将 {mine.length} 道题从当前训练和待办中移除。保留全部代码、草稿、提交历史、身份和目标计划；可以从题库重新加入。</p></Modal>}
       {dialog === "help" && (
         <Modal title="键盘操作" onClose={() => setDialog(null)} wide>
           <div className="shortcut-grid">

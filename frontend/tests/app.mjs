@@ -9,7 +9,7 @@ await vite.listen();
 const browser = await chromium.launch({ channel: process.env.CI ? undefined : 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 2048, height: 1152 } });
 page.setDefaultTimeout(10000);
-await page.addInitScript(() => localStorage.setItem('tb.preferences', JSON.stringify({ theme: 'light', fontSize: 18, accent: 'teal' })));
+await page.addInitScript(() => localStorage.setItem('tb.preferences', JSON.stringify({ theme: 'light', fontSize: 18, accent: 'teal', pageBookmarks: [{ id: 'legacy', page: 'lectures', name: '旧书签' }] })));
 const errors = [], writes = [], now = () => new Date().toISOString(), date = now().slice(0, 10);
 page.on('pageerror', issue => errors.push(issue.message));
 const rows = ['A', 'B', 'C', 'D', 'E', 'F'].map((letter, index) => ({ id: '测试比赛::' + letter, contest: '测试比赛', problem: letter, title: ['区间统计练习', '位运算练习', '背包练习', '枚举练习', '数论练习', '字符串练习'][index], tags: [['前缀和'], ['位运算'], ['背包 DP'], ['枚举'], ['素数'], ['KMP']][index], knowledge: '知识点', platform: index % 2 ? 'AtCoder' : '牛客', series: '周赛', difficulty: 1000 + index * 200, contestDate: '2026-10-01T12:00:00Z', url: 'https://example.com/problem/' + letter, solutionAvailable: true }));
@@ -37,6 +37,8 @@ await page.route('**/api/**', async route => {
   if (body) { assert.equal(request.headers()['x-tb-token'], 'fixture'); writes.push({ path, body }); }
   let value;
   if (path === '/api/data') value = { rows, categories, token: 'fixture', today: date, revision: 'fixture' };
+  else if (path === '/api/goals') value = { goals: [] };
+  else if (path === '/api/desktop/fullscreen') value = { available: false, fullscreen: false };
   else if (path === '/api/workspace') value = workspace();
   else if (path === '/api/inbox') value = { pending: 0, errors: [] };
   else if (path === '/api/hub') value = hub;
@@ -80,12 +82,9 @@ try {
   await page.getByLabel('平台筛选').selectOption('AtCoder');
   assert.equal(await page.locator('.problem-table tbody tr[data-id]').count(), 2);
   assert.equal(await page.locator('.page-identity h1').evaluate(node => getComputedStyle(node).userSelect), 'none');
-  await page.getByLabel('搜索知识清单').fill('位运算');
-  await page.locator('.sidebar').getByRole('treeitem', { name: /位运算/ }).waitFor();
-  assert.equal(await page.locator('.sidebar').getByRole('treeitem', { name: /背包/ }).count(), 0);
-  await page.getByRole('button', { name: '清空知识清单搜索' }).click();
-  await page.locator('.knowledge-tree-tools').getByRole('button', { name: '展开全部' }).click();
-  assert.ok(await page.locator('.sidebar').getByRole('treeitem').count() >= 5);
+  assert.equal(await page.locator('.sidebar .knowledge-search,.sidebar .knowledge-tree-tools,.sidebar-section-title').count(), 0);
+  assert.ok(await page.locator('.sidebar').getByRole('treeitem').count() > 0);
+  assert.equal(await page.locator('.sidebar nav').evaluate(node => node.scrollHeight > node.clientHeight + 1), false);
 
   await page.keyboard.press('Control+7');
   assert.equal(await page.locator('.progress-recommendations').getByText('巩固前缀和隐藏知识点', { exact: true }).count(), 0);
@@ -218,11 +217,10 @@ try {
   await page.getByLabel('页面组合 records').fill('我的记录');
   await page.getByLabel('页面组合 activity').fill('我的记录');
   await page.getByRole('button', { name: '上移 排行榜', exact: true }).click();
-  await page.getByLabel('书签页面').selectOption('lectures');
-  await page.getByLabel('新书签名称').fill('算法基础');
-  await page.getByRole('button', { name: '添加书签', exact: true }).click();
-  await page.getByRole('button', { name: '书签 算法基础', exact: true }).waitFor();
-  await page.getByRole('button', { name: '我的记录', exact: true }).click();
+  assert.equal(await page.getByText('我的书签', { exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '添加书签', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '书签 旧书签', exact: true }).count(), 0, 'stored bookmarks stay removed after upgrade');
+  await page.keyboard.press('Control+8');
   await page.getByRole('tab', { name: '活动记录', exact: true }).waitFor();
   await page.getByRole('tab', { name: '活动记录', exact: true }).click();
   await page.locator('.activity-details').waitFor();
@@ -230,5 +228,5 @@ try {
   assert.equal(await page.locator('.page-identity h1').textContent(), '历史提交', 'fixed keyboard shortcut survives reorder/rename/group');
   await noOverflow('.records-page');
   assert.deepEqual(errors, []);
-  console.log('v5 UI passed: blind mock + filters + single groups, mock history/submission history, daily XP claims, visible achievements, canonical math lectures, custom API, persistent identity/offline and connected ranking states, configurable navigation/bookmarks and large-font responsive layouts.');
+  console.log('v5 UI passed: blind mock + filters + single groups, mock history/submission history, daily XP claims, visible achievements, canonical math lectures, custom API, persistent identity/offline and connected ranking states, configurable navigation and removed bookmarks and large-font responsive layouts.');
 } finally { await browser.close(); await vite.close(); }

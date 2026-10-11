@@ -161,6 +161,24 @@ def check_dependencies() -> dict:
     }
 
 
+def bind_desktop_fullscreen(server, window) -> None:
+    from window_memory import is_fullscreen
+
+    def desktop_state():
+        try:
+            return {"available": True, "fullscreen": is_fullscreen(window)}
+        except Exception:
+            return {"available": False, "fullscreen": False}
+
+    def desktop_fullscreen(value):
+        if bool(value) != is_fullscreen(window):
+            window.toggle_fullscreen()
+        return {"available": True, "fullscreen": is_fullscreen(window)}
+
+    server.desktop_state = desktop_state
+    server.desktop_fullscreen = desktop_fullscreen
+
+
 def run_desktop() -> int:
     instance = SingleInstance()
     server = None
@@ -188,14 +206,27 @@ def run_desktop() -> int:
         url = f"http://127.0.0.1:{port}"
         LOG.info("Launching TB at %s with %s", url, sys.executable)
         webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
+        from window_memory import remembered, bind
+        memory_path = STATE / 'desktop-window.json'
+        bounds = remembered(memory_path)
         window = webview.create_window(
-            "TB", url, width=1480, height=920, min_size=(1050, 700),
+            "TB", url, **bounds, min_size=(1050, 700),
             background_color="#101116", text_select=True, zoomable=False,
         )
         if window is None:
             raise RuntimeError("无法创建 TB 窗口。")
+        bind(window, memory_path)
+        # 桌面全屏：受本机写接口保护，通过 pywebview 原生 toggle_fullscreen 实现。
+        bind_desktop_fullscreen(server, window)
         from official_bridge import OfficialBridge
-        official = OfficialBridge(window, guard=server.validate_official_url)
+        official = OfficialBridge(
+            window,
+            guard=server.validate_official_url,
+            on_receipt=server.record_official_receipt,
+            on_pending=server.record_official_pending,
+            resume_loader=server.resume_official_sessions,
+            native_setup=None,
+        )
         server.official_opener = official.open
         server.official_submitter = official.submit
         server.official_status = official.status

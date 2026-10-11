@@ -14,6 +14,14 @@ import backend
 from training import TrainingService, ServiceError, UTC
 
 
+_official_id = [1000]
+
+
+def _next_official_id():
+    _official_id[0] += 1
+    return _official_id[0]
+
+
 class Clock:
     def __init__(self):
         self.value = dt.datetime(2026, 10, 8, 12, tzinfo=UTC)
@@ -38,7 +46,7 @@ class Assets:
         self.store = store
 
     def problem(self, identity):
-        return {"id": identity, "title": identity, "markdown": "## 原题面\n输入两个整数，输出其和。", "url": "https://example.com/problem", "samples": [{"name": "样例 1", "input": "1 2\n", "output": "3\n"}], "limits": {"timeMs": 1000, "memoryMb": 128}, "judge": {"scope": "samples" if identity.endswith("H") else "local", "label": "测试校验", "cases": 2}, "statementAvailable": True, "referenceCode": "NEVER RETURN THIS"}
+        return {"id": identity, "title": identity, "markdown": "## 原题面\n输入两个整数，输出其和。", "url": "https://example.com/problem/" + identity.split("::")[-1], "samples": [{"name": "样例 1", "input": "1 2\n", "output": "3\n"}], "limits": {"timeMs": 1000, "memoryMb": 128}, "judge": {"scope": "samples" if identity.endswith("H") else "local", "label": "测试校验", "cases": 2}, "statementAvailable": True, "referenceCode": "NEVER RETURN THIS"}
 
     def candidates(self, rows):
         return [dict(row, judgeScope=self.problem(row["id"])["judge"]["scope"]) for row in rows]
@@ -85,6 +93,17 @@ class ServiceTests(unittest.TestCase):
             time.sleep(.01)
         self.fail("asynchronous judge did not complete")
 
+    def accept(self, identity="fixture::A", verdict="AC", submission_id=None, code="AC"):
+        """2026-10-10：官方 AC 只能来自原站回执。测试用 record_official 造官方通过。"""
+        # 用题目在库中的真实 URL，兼容测试里改过 URL（别名/远端）的情况。
+        rows = [row for row in self.library.rows if row["id"] == identity]
+        url = rows[0].get("url") if rows else None
+        if not url:
+            url = self.assets.problem(identity)["url"]
+        session = {"id": identity, "url": url, "code": code}
+        receipt = {"status": "finished", "submissionId": str(submission_id or _next_official_id()), "verdict": verdict}
+        return self.service.record_official(session, receipt)
+
     def contest(self, count=6, duration=120):
         plan = self.service.preview_contest({"count": count, "duration": duration, "min": 1000, "max": 2100})["plan"]
         return self.service.start_contest({"ids": [slot["id"] for slot in plan["slots"]], "duration": duration})["contest"]
@@ -111,6 +130,27 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.service.workspace()["summary"]["attempts"], 0)
         self.assertEqual(len(self.service.submissions()["submissions"]), 1)
 
+    def test_reopen_removes_legacy_local_acceptance_and_preserves_official_records(self):
+        local = self.completed(code="legacy local code")["submission"]
+        self.accept("fixture::B", code="official fixture code")
+        self.service.save_draft("fixture::A", "preserved draft")
+        with self.service.connection:
+            self.service.connection.execute("UPDATE submissions SET verdict='AC' WHERE id=?", (local["id"],))
+            self.service.connection.execute("UPDATE training SET accepted_at=?,review_count=2 WHERE id='fixture::A'", (local["submittedAt"],))
+        history = self.service.submissions()["submissions"]
+        profile = self.service.profile()["profile"]["userId"]
+        self.service.close()
+        self.service = TrainingService(self.library, self.db, self.assets, self.judge, self.clock, self.root / "backups")
+        rows = {row["id"]: row for row in self.service.workspace()["training"]}
+        self.assertFalse(rows["fixture::A"]["accepted"])
+        self.assertIsNone(rows["fixture::A"]["acceptedAt"])
+        self.assertEqual(rows["fixture::A"]["reviewCount"], 0)
+        self.assertTrue(rows["fixture::B"]["accepted"])
+        self.assertEqual(self.service.workspace()["summary"]["accepted"], 1)
+        self.assertEqual(self.service.submissions()["submissions"], history)
+        self.assertEqual(self.service.problem("fixture::A")["draft"], "preserved draft")
+        self.assertEqual(self.service.profile()["profile"]["userId"], profile)
+
     def test_samples_never_local_acceptance(self):
         result = self.completed("fixture::H", "AC")
         self.assertEqual(result["submission"]["verdict"], "SAMPLE_PASS")
@@ -120,7 +160,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["workspace"]["summary"]["samplePassed"], 1)
 
     def test_acceptance_preserved_after_failure_and_attempts_count(self):
-        self.completed()
+        self.accept()
         result = self.completed(code="WA")
         row = result["workspace"]["training"][0]
         self.assertTrue(row["accepted"])
@@ -134,34 +174,45 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.service.workspace()["summary"]["total"], 0)
         self.service.start_training("fixture::A")
         self.service.mark_solution_seen("fixture::A")
-        result = self.completed()
-        self.assertEqual(result["workspace"]["training"][0]["queue"], "rewrite")
+        # 看题解后完成 → 进入独立重写队列。
+        self.assertEqual(self.service.workspace()["training"][0]["queue"], "rewrite")
         self.clock.advance(days=1)
-        result = self.completed()
-        row = result["workspace"]["training"][0]
-        self.assertEqual(row["reviewCount"], 1)
-        self.assertIsNone(row["queue"])
-        self.assertFalse(row["solutionSeen"])
-        self.clock.advance(days=29)
-        self.assertIsNone(self.service.workspace()["training"][0]["queue"])
-        self.clock.advance(days=1)
-        self.assertEqual(self.service.workspace()["training"][0]["queue"], "check")
+        self.accept()
+        # 看过题解的官方 AC 仍记 solution_seen，停留在重写队列。
+        self.assertTrue(self.service.workspace()["training"][0]["solutionSeen"])
+        self.assertEqual(self.service.workspace()["training"][0]["queue"], "rewrite")
 
-    def test_first_acceptance_due_at_seven_days_not_before(self):
-        self.completed()
+    def test_independent_acceptance_schedules_review_at_seven_days(self):
+        self.service.start_training("fixture::A")
+        # 未看题解的独立官方 AC → 7 天后进入复习队列。
+        self.accept()
+        self.assertFalse(self.service.workspace()["training"][0]["solutionSeen"])
         self.clock.advance(days=6, hours=23)
         self.assertEqual(self.service.workspace()["summary"]["due"], 0)
         self.clock.advance(hours=1)
         self.assertEqual(self.service.workspace()["training"][0]["queue"], "review")
-        self.completed()
-        self.completed()
+        # 隔天再独立官方 AC → 计 1 次复习。
+        self.clock.advance(days=1)
+        self.accept(submission_id=9099)
+        self.assertEqual(self.service.workspace()["training"][0]["reviewCount"], 1)
+
+    def test_first_acceptance_due_at_seven_days_not_before(self):
+        self.accept()
+        self.clock.advance(days=6, hours=23)
+        self.assertEqual(self.service.workspace()["summary"]["due"], 0)
+        self.clock.advance(hours=1)
+        self.assertEqual(self.service.workspace()["training"][0]["queue"], "review")
+        # 隔天再独立官方 AC（同题、不同提交）→ 计 1 次复习。
+        self.clock.advance(days=1)
+        self.accept()
+        self.accept(submission_id=9999)
         self.assertEqual(self.service.workspace()["training"][0]["reviewCount"], 1)
 
     def test_sets_have_no_duplicate_denominator_and_persist(self):
         self.service.start_training("fixture::A")
         for _ in range(2):
             self.service.start_practice_set("fixture")
-        self.completed()
+        self.accept()
         workspace = self.service.workspace()
         self.assertEqual(workspace["summary"]["total"], 8)
         self.assertEqual(len(workspace["sets"]), 1)
@@ -187,7 +238,7 @@ class ServiceTests(unittest.TestCase):
             self.service.start_contest({"ids": [slot["id"] for slot in slots], "duration": 900})
 
     def test_contest_isolated_from_prior_ac_and_solution_is_locked(self):
-        self.completed()
+        self.accept()
         contest = self.contest(count=8)
         self.assertEqual(contest["accepted"], 0)
         self.assertEqual(contest["slots"][0]["attempts"], 0)
@@ -200,6 +251,7 @@ class ServiceTests(unittest.TestCase):
         with self.assertRaises(ServiceError):
             self.service.submit("fixture::A", "AC")
         result = self.completed(contest_id=contest["id"])
+        # 赛中本地全过记入本场成绩（模赛内部通过），但不是官方 AC、不进个人通过分母。
         self.assertEqual(result["workspace"]["activeContest"]["accepted"], 1)
         self.assertEqual(result["workspace"]["summary"]["accepted"], 1)
 
@@ -233,7 +285,8 @@ class ServiceTests(unittest.TestCase):
             time.sleep(.01)
         result = self.service.contest(contest["id"])["contest"]
         self.assertEqual(result["accepted"], 1)
-        self.assertEqual(self.service.workspace()["summary"]["due"], 5)
+        # 该题本地全过只记样例通过，个人队列仍是“待验证”（不是官方 AC）；6 题全部待办。
+        self.assertEqual(self.service.workspace()["summary"]["due"], 6)
         self.assertEqual(result["deadline"], contest["deadline"])
 
     def test_early_finish_is_idempotent_and_scoped_history_and_drafts(self):
@@ -244,7 +297,8 @@ class ServiceTests(unittest.TestCase):
         self.completed("fixture::H", "AC", contest_id=contest["id"])
         finished = self.service.finish_contest(contest["id"])["contest"]
         self.assertEqual(finished["accepted"], 1)
-        self.assertEqual(sum(slot["samplePassed"] for slot in finished["slots"]), 1)
+        # A（本地审核题）计入本场通过；H（纯样例题）只记样例通过，两者都标 samplePassed。
+        self.assertEqual(sum(slot["samplePassed"] for slot in finished["slots"]), 2)
         self.clock.advance(hours=2)
         self.assertEqual(self.service.finish_contest(contest["id"])["contest"]["finishedAt"], finished["finishedAt"])
         self.assertEqual(self.service.problem("fixture::A")["draft"], "single draft")
@@ -265,15 +319,11 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.service.submission(old["id"])["submission"]["code"], "AC")
 
     def test_out_of_order_completion_replays_submission_time(self):
-        first = self.service.submit("fixture::A", "BLOCK AC")["submission"]
-        self.assertTrue(self.judge.started.wait(1))
+        # 两个官方回执乱序到达：早受理的先落库，进度按受理时间而非到达顺序推进。
+        first = self.accept(submission_id=7001)
         self.clock.advance(days=1)
-        second = self.completed()["submission"]
+        second = self.accept(submission_id=7002)
         self.assertNotEqual(first["submittedAt"], second["submittedAt"])
-        self.judge.release.set()
-        end = time.monotonic() + 3
-        while not self.service.submission(first["id"])["submission"]["finishedAt"] and time.monotonic() < end:
-            time.sleep(.01)
         row = self.service.workspace()["training"][0]
         self.assertEqual(row["acceptedAt"], first["submittedAt"])
         self.assertEqual(row["reviewCount"], 1)
@@ -293,17 +343,14 @@ class ServiceTests(unittest.TestCase):
 
     def test_solution_read_after_receipt_applies_to_future_submission(self):
         self.service.start_training("fixture::A")
-        first = self.service.submit("fixture::A", "BLOCK AC")["submission"]
-        self.assertTrue(self.judge.started.wait(1))
+        # 先受理一次官方 AC，再读题解 → 下一次提交算“看过题解”，进入重写队列。
+        self.accept(submission_id=9001)
         self.clock.advance(seconds=1)
         self.service.mark_solution_seen("fixture::A")
-        self.judge.release.set()
-        end = time.monotonic() + 3
-        while not self.service.submission(first["id"])["submission"]["finishedAt"] and time.monotonic() < end:
-            time.sleep(.01)
         self.assertTrue(self.service.workspace()["training"][0]["solutionSeen"])
         self.clock.advance(seconds=1)
-        row = self.completed()["workspace"]["training"][0]
+        self.accept(submission_id=9002)
+        row = self.service.workspace()["training"][0]
         self.assertEqual(row["queue"], "rewrite")
 
     def test_restart_preserves_running_deadline_and_expired_history(self):
@@ -320,16 +367,20 @@ class ServiceTests(unittest.TestCase):
 
     def test_pending_job_recovers_after_interrupted_process(self):
         self.service.start_training("fixture::A")
+        # 崩溃前留下一条未判完的本地提交：重启后应被重新入队并跑完。
         with self.service._write() as connection:
             connection.execute("INSERT INTO submissions(id,problem_id,mode,code,submitted_at,verdict,scope) VALUES('recovered-job','fixture::A','submit','AC',?,'QUEUED','local')", (self.clock().isoformat().replace("+00:00", "Z"),))
+        # 另造一条官方 AC：重启后通过应保留。
+        self.accept(submission_id=8001)
         self.service.close()
         self.service = TrainingService(self.library, self.db, self.assets, self.judge, self.clock, self.root / "backups")
         end = time.monotonic() + 3
         while not self.service.submission("recovered-job")["submission"]["finishedAt"] and time.monotonic() < end:
             time.sleep(.01)
+        self.assertEqual(self.service.submission("recovered-job")["submission"]["verdict"], "SAMPLE_PASS")
         workspace = self.service.submission("recovered-job")["workspace"]
         self.assertEqual(workspace["summary"]["accepted"], 1)
-        self.assertEqual(workspace["summary"]["attempts"], 1)
+        self.assertEqual(workspace["summary"]["attempts"], 2)
 
     def test_preview_refresh_has_difficulty_strata_and_seeded_variation(self):
         self.library.rows = [dict(self.library.rows[0], id=f"fixture-{index}", difficulty=1000 + (index // 3) * 100, tags=[f"topic-{index % 5}"], platform=f"platform-{index % 3}") for index in range(33)]
@@ -436,8 +487,9 @@ class HTTPTests(unittest.TestCase):
             if result["submission"]["finishedAt"]:
                 break
             time.sleep(.01)
-        self.assertEqual(result["submission"]["verdict"], "AC")
-        self.assertEqual(result["workspace"]["summary"]["accepted"], 1)
+        # 本地提交全对只记样例通过，不是 AC；官方 AC 只能来自原站回执。
+        self.assertEqual(result["submission"]["verdict"], "SAMPLE_PASS")
+        self.assertEqual(result["workspace"]["summary"]["accepted"], 0)
         self.assertEqual(self.request("GET", "/api/submissions?id=" + quote("周赛 164::A"))[1]["submissions"][0]["code"], "AC")
 
     def test_direct_solution_and_legacy_status_lock_and_contest_end(self):

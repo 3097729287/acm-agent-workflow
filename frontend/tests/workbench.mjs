@@ -98,20 +98,30 @@ try {
   assert.equal(await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'submissions').at(-1).body.sampleRun), false, 'empty custom input is not sample execution');
   assert.ok(await page.getByText('自定义输入没有预期答案，仅检查程序是否正常运行。', { exact: true }).isVisible());
   assert.equal(await page.evaluate(() => window.workbenchFixture.progress.length), 0);
+  assert.deepEqual(await page.locator('.wb-run-actions button').allTextContents(), ['运行输入', '提交']);
+  assert.equal(await page.getByRole('button', { name: '本地提交', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '官方提交', exact: true }).count(), 0);
   await editor.press('Control+Enter');
-  await page.waitForFunction(() => document.querySelector('.wb-result-summary')?.textContent.includes('样例通过'));
-  assert.ok(await page.getByText('仅通过公开样例，暂不计入已 AC。').isVisible());
-  await page.waitForFunction(() => window.workbenchFixture.progress.length === 1);
-  await editor.press('Control+Shift+Enter');
-  await page.getByText('请在原站面板登录。', { exact: true }).waitFor();
+  await page.getByText('请先登录授权。', { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'official/submit').at(-1).body.code), 'reopened A final code');
-  assert.equal(await page.evaluate(() => window.workbenchFixture.submissions.length), 4, 'official opening is not a local submission');
-  await page.getByRole('button', { name: '原站面板 / 登录', exact: true }).click();
-  await page.getByText('请在原站面板登录。', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.workbenchFixture.submissions.length), 3, 'submit never invokes local judging');
+  await page.getByRole('button', { name: '登录授权', exact: true }).click();
+  await page.getByText('请先登录授权。', { exact: true }).waitFor();
   assert.ok(await page.evaluate(() => window.workbenchFixture.calls.some(call => call.path === 'official/open')));
-  await page.getByRole('button', { name: '返回训练', exact: true }).click();
-  await page.getByText('已关闭原站面板，返回训练。', { exact: true }).waitFor();
-  assert.equal(await page.evaluate(() => window.workbenchFixture.progress.length), 1, 'login/opening does not manufacture accepted progress');
+  assert.equal(await page.evaluate(() => window.workbenchFixture.progress.length), 0, 'login/opening never manufactures accepted progress');
+  await page.evaluate(() => { window.workbenchFixture.officialStatus = 'ready'; });
+  await page.getByText('登录成功，可以提交。', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await page.evaluate(() => { window.workbenchFixture.officialStatus = 'judging'; });
+  await page.getByText('官方评测中', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '提交', exact: true }).isDisabled(), true);
+  const beforeDuplicate = await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'official/submit').length);
+  await editor.press('Control+Enter');
+  assert.equal(await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'official/submit').length), beforeDuplicate);
+  assert.equal(await editor.isVisible(), true, 'editor stays available while official judging');
+  await page.evaluate(() => { window.workbenchFixture.officialStatus = 'finished'; });
+  await page.waitForFunction(() => document.querySelector('.wb-result-summary')?.textContent.includes('官方 AC'));
+  await page.waitForFunction(() => window.workbenchFixture.progress.length === 1);
 
   // Button Enter must remain a native click, not a preview toggle/global key.
   const solution = page.getByRole('button', { name: '题解', exact: true });
@@ -142,11 +152,12 @@ try {
   await page.locator('.wb-translation-error').getByRole('button', { name: '重试', exact: true }).click();
   await page.getByText('机器翻译 · Fixture provider', { exact: true }).waitFor();
 
-  await page.evaluate(() => { window.workbenchFixture.problemDelay.B = 10; window.workbenchFixture.nextVerdict = 'AC'; window.workbenchFixture.changeProblem('B'); });
+  await page.evaluate(() => { window.workbenchFixture.problemDelay.B = 10; window.workbenchFixture.officialStatus = 'judging'; window.workbenchFixture.changeProblem('B'); });
   await page.waitForFunction(() => document.querySelector('.wb-heading strong').textContent === '最长的路径');
   await editor.fill('int main() { return 0; }');
   await editor.press('Control+Enter');
-  await page.waitForFunction(() => document.querySelector('.wb-result-summary')?.textContent.includes('本地 AC'));
+  await page.evaluate(() => { window.workbenchFixture.officialStatus = 'finished'; });
+  await page.waitForFunction(() => document.querySelector('.wb-result-summary')?.textContent.includes('官方 AC'));
   await page.waitForFunction(() => window.workbenchFixture.progress.length === 2);
   assert.equal(await page.evaluate(() => window.workbenchFixture.progress.at(-1).summary.accepted), 1);
   await editor.fill('unsaved edit before restoring history');
@@ -169,8 +180,8 @@ try {
   await page.evaluate(() => window.workbenchFixture.changeContest({ id: 'mock1', status: 'finished', slots: [{ id: 'A', letter: 'A' }] }));
   await page.waitForFunction(() => document.querySelector('.cm-content')?.getAttribute('aria-readonly') === 'true');
   assert.equal(await editor.getAttribute('aria-readonly'), 'true');
-  assert.equal(await page.getByRole('button', { name: '本地提交', exact: true }).isDisabled(), true);
-  assert.equal(await page.getByRole('button', { name: '运行', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: '提交', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: '运行样例', exact: true }).isDisabled(), true);
 
   const overflow = await page.evaluate(() => ({
     page: document.documentElement.scrollWidth > innerWidth,

@@ -87,7 +87,7 @@ class RecommendationTests(unittest.TestCase):
         self.assertEqual(value['recommendations'][0]['band'],{'min':1000,'max':1250,'target':1100})
     def test_real_evidence_moves_band_and_due_cannot_force_excessive_difficulty(self):
         rows=[self.row('p1',1300,['排序']),self.row('p2',1500,['前缀和']),self.row('p3',1700,['枚举']),self.row('next',1550,['BFS']),self.row('hall',1500,['Hall 定理']),self.row('too-hard',2100,['模拟'])]
-        records=[{'problem_id':row['id'],'mode':'submit','finished_at':'2026-10-08T10:00:00Z','submitted_at':'2026-10-08T09:00:00Z','verdict':'AC','scope':'local','solution_seen':0,'code':'code '+row['id']} for row in rows[:3]]
+        records=[{'problem_id':row['id'],'mode':'submit','finished_at':'2026-10-08T10:00:00Z','submitted_at':'2026-10-08T09:00:00Z','verdict':'AC','scope':'official','solution_seen':0,'code':'code '+row['id']} for row in rows[:3]]
         value=self.insights(rows,records,training=[dict(rows[-1],queue='fill',accepted=False)])
         self.assertEqual(value['assessment']['recommendationLevel'],1500)
         self.assertEqual([item['problem']['id'] for item in value['recommendations']],['next'])

@@ -24,7 +24,7 @@ from version import VERSION
 LOG=logging.getLogger('tb.integrations')
 HOSTS={'codeforces.com','atcoder.jp','ac.nowcoder.com','www.luogu.com.cn','api.github.com','github.com','kenkoooo.com'}
 KNOWN_REPO='3097729287/acm-agent-workflow'
-DEFAULTS={'githubRepo':KNOWN_REPO,'autoSync':True,'intervalHours':6,'minDifficulty':1000,'maxDifficulty':2199,'includePrereleases':True,'accounts':{p:'' for p in P.LABELS}}
+DEFAULTS={'githubRepo':KNOWN_REPO,'autoSync':True,'intervalHours':6,'minDifficulty':0,'maxDifficulty':10000,'includePrereleases':True,'accounts':{p:'' for p in P.LABELS}}
 
 def now():return dt.datetime.now(dt.timezone.utc)
 def stamp(value=None):return (value or now()).isoformat()
@@ -165,6 +165,9 @@ class IntegrationService:
             if key not in self.state or value is not None and not isinstance(self.state[key],type(value)):
                 self.state[key]=copy.deepcopy(value)
         self.state['sync']['busy']=False;self.state['settings']={**copy.deepcopy(DEFAULTS),**self.state['settings']}
+        if not self.state.get('collectionPolicy'):
+            if (self.state['settings']['minDifficulty'],self.state['settings']['maxDifficulty'])==(1000,2199):self.state['settings'].update(minDifficulty=0,maxDifficulty=10000)
+            self.state['collectionPolicy']='all-levels-v1'
         self.state['settings']['accounts']={**DEFAULTS['accounts'],**self.state['settings'].get('accounts',{})}
         if legacy_source and not self.state['settings']['githubRepo']:self.state['settings']['githubRepo']=KNOWN_REPO
         self.state['githubSourceInitialized']=True
@@ -207,6 +210,14 @@ class IntegrationService:
         remote=bool(raw.get('_remote'))
         return {'difficultySource':'公开同步记录' if remote else '归档训练难度（联网后核对最新资料）',
                 'difficultyConfidence':'UNKNOWN','difficultyEstimated':True}
+
+    @staticmethod
+    def _collectable(row,settings):
+        from contest_rules import is_xcpc
+        if is_xcpc(row):return True
+        difficulty=row.get('difficulty')
+        if difficulty is None:return settings['minDifficulty']==0 and settings['maxDifficulty']==10000
+        return isinstance(difficulty,int) and not isinstance(difficulty,bool) and settings['minDifficulty']<=difficulty<=settings['maxDifficulty']
 
     def _observe_difficulty(self,row):
         key=canonical(row.get('url'));rating=row.get('difficulty')
@@ -269,7 +280,7 @@ class IntegrationService:
                 if key in body:
                     if not isinstance(body[key],bool):fail(422,'同步开关必须为布尔值')
                     settings[key]=body[key]
-            for key,lo,hi in [('intervalHours',1,168),('minDifficulty',1000,2199),('maxDifficulty',1000,2199)]:
+            for key,lo,hi in [('intervalHours',1,168),('minDifficulty',0,10000),('maxDifficulty',0,10000)]:
                 if key in body:
                     number=body[key]
                     if not isinstance(number,int) or isinstance(number,bool) or not lo<=number<=hi:fail(422,'同步周期或收录难度超出允许范围')
@@ -320,7 +331,7 @@ class IntegrationService:
         result=[]
         for row in rows:
             row.update(metadata.get(canonical(row.get('url')),{}))
-            if isinstance(row.get('difficulty'),int) and settings['minDifficulty']<=row['difficulty']<=settings['maxDifficulty']:
+            if self._collectable(row,settings):
                 result.append(enrich_row(row,official_tags=row.get('officialTags')))
         return result
 
@@ -398,15 +409,15 @@ class IntegrationService:
                 self._observe_difficulty(value)
                 self.dates.observe(value)
                 difficulty=value.get('difficulty');ended=P.utc(value.get('endedAt'))
-                if not isinstance(difficulty,int) or isinstance(difficulty,bool) or not ended or dt.datetime.fromisoformat(ended)>self.clock():continue
+                if not ended or dt.datetime.fromisoformat(ended)>self.clock():continue
                 existing=self.state['rows'].get(value['id'])
                 if existing and 'addedAt' in existing:value['addedAt']=existing['addedAt']
                 if existing:self.state['rows'][value['id']]=value
-                if not settings['minDifficulty']<=difficulty<=settings['maxDifficulty'] or canonical(value['url']) in local_urls:continue
+                if not self._collectable(value,settings) or canonical(value['url']) in local_urls:continue
                 if value['id'] not in self.state['rows']:
                     value['addedAt']=stamp(self.clock());added+=1;added_ids.append(value['id']);added_urls.append(value['url'])
                 self.state['rows'][value['id']]=value
-            if added:self._notice('catalog:'+platform+':'+hashlib.sha256(json.dumps(sorted(self.state['rows'])).encode()).hexdigest()[:16],'catalog',P.LABELS[platform]+' 新结束赛题目',f'新增 {added} 道有难度证据的题；题解尚未生成，不自动加入个人训练。',count=added,problem_ids=added_ids,problem_urls=added_urls)
+            if added:self._notice('catalog:'+platform+':'+hashlib.sha256(json.dumps(sorted(self.state['rows'])).encode()).hexdigest()[:16],'catalog',P.LABELS[platform]+' 新结束赛题目',f'新增 {added} 道赛题；未评级题如实标注，题解尚未生成。',count=added,problem_ids=added_ids,problem_urls=added_urls)
         return {'platform':platform,'status':'partial' if pending else 'ready','message':message,'added':added,'pending':len(pending)}
 
     def _account(self,platform):

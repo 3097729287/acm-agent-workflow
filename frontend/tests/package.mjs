@@ -67,6 +67,8 @@ try {
 
   const library = await get('data');
   token = library.token;
+  const goalDeadline = new Date(Date.now() + 30 * 86400000).toISOString().slice(0,10);
+  await post('goals/save',{title:'安装验证目标',kind:'custom',deadline:goalDeadline,currentRating:500,dailyMinutes:90,totalProblems:10});
   const tested = library.rows.find(row => row.contest === '入门赛 49' && row.problem === 'D');
   assert.ok(tested, 'Packaged archive includes the reviewed stair problem.');
   const profile = await post('profile', { nickname: '安装包验证', endpoint: '' });
@@ -95,6 +97,7 @@ try {
   assert.equal(progress.summary.accepted, 1, 'The packaged C++ toolchain compiles and passes actual reviewed cases.');
   const acceptedInsights = await get('insights');
   assert.equal(acceptedInsights.summary.localAccepted, 1);
+  assert.equal((await get('goals')).goals[0].progress,1,'A real first AC advances the independent goal task.');
   const daily = await get('daily-tasks');
   const reward = daily.tasks.find(task => task.completed && !task.claimed);
   assert.ok(reward, 'A first reviewed acceptance completes a daily mission.');
@@ -111,6 +114,7 @@ try {
   }, base, { timeout: 60000 });
   assert.equal((await get('insights')).growth.totalXp, acceptedInsights.growth.totalXp);
   assert.equal((await get('daily-tasks')).tasks.find(task => task.id === 'solve-1').progress, 1);
+  assert.equal((await get('goals')).goals[0].progress,1,'Repeated AC cannot farm goal progress.');
   await page.getByRole('button', { name: '返回列表', exact: true }).click();
   await page.keyboard.press('Control+7');
   const taskCard = page.locator('.daily-task').filter({ hasText: reward.title });
@@ -237,6 +241,30 @@ try {
   await page.reload();
   await page.locator('.page-identity').waitFor();
   assert.equal((await get('profile')).profile.userId, identity.profile.userId, 'Reload preserves the same unique ID.');
+  const replayRows=library.rows.filter(row=>row.contest==='入门赛 49').sort((a,b)=>a.problem.localeCompare(b.problem));
+  const replay=(await post('contests/preview',{mode:'replay',contest:'入门赛 49',duration:300,rules:'xcpc'})).plan;
+  assert.deepEqual(replay.slots.map(slot=>slot.id),replayRows.map(row=>row.id),'Replay retains the entire collected paper.');
+  const replayContest=(await post('contests/start',{previewId:replay.previewId,ids:replay.slots.map(slot=>slot.id),duration:300})).contest;
+  assertBlind(replayContest.slots,'packaged replay');
+  await post('contests/finish',{contestId:replayContest.id});
+  const preservedDraft=(await get('problem?id='+encodeURIComponent(tested.id))).draft;
+  const preservedHistory=(await get('submissions')).total;
+  await page.keyboard.press('Control+1');
+  await page.getByLabel('清空我的训练').click();
+  await page.getByRole('dialog').getByRole('button',{name:/确认清空/}).click();
+  await page.waitForFunction(()=>!document.querySelector('[role="dialog"]'));
+  assert.equal((await get('workspace')).summary.total,0);
+  assert.equal((await get('problem?id='+encodeURIComponent(tested.id))).draft,preservedDraft);
+  assert.equal((await get('submissions')).total,preservedHistory);
+  assert.equal((await get('goals')).goals[0].progress,1);
+  await page.keyboard.press('Control+4');
+  await page.getByRole('tab',{name:'蓝桥杯 B 组历年',exact:true}).click();
+  await page.getByLabel('蓝桥杯年份').selectOption('2026');
+  assert.ok(await page.locator('.competition-card').count());
+  await page.setViewportSize({width:1050,height:700});
+  const nav=await page.locator('.sidebar nav').evaluate(node=>({height:node.clientHeight,scroll:node.scrollHeight,bottom:node.getBoundingClientRect().bottom}));
+  assert.ok(nav.scroll<=nav.height+1&&nav.bottom<700,JSON.stringify(nav));
+  await screenshot('v7-packaged-lanqiao-small');
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, localAccepted: 1, submissions: history.total, xp: afterMock.growth.totalXp, lectures: lectures.lectures.length, mockAccepted: 0, sharedRankingConfigured: false, checks: ['fresh isolated profile', 'bundled C++17 run and reviewed AC', 'nonduplicating daily experience', 'historical source code', 'targeted and single blind mock', 'instant finish earns no reward', 'canonical mathematics lectures', 'custom API fields', 'persistent identity', 'responsive installed UI'] }, null, 2));
 } catch (error) {

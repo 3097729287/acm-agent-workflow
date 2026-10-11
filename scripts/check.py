@@ -25,7 +25,8 @@ def library_check():
         assert not db.execute('PRAGMA foreign_key_check').fetchall()
         counts = {table: db.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0]
                   for table in ('problems', 'solutions', 'statements', 'lectures', 'problem_lectures')}
-        assert counts['problems'] == counts['solutions'] and counts['problems'] >= 607
+        assert counts['problems'] >= counts['solutions'] >= 607
+        assert not db.execute('SELECT problem_id FROM solutions WHERE NOT EXISTS (SELECT 1 FROM problems WHERE problems.id=solutions.problem_id)').fetchall()
         for row, in db.execute('SELECT raw FROM problems'):
             data = json.loads(row)
             assert (data['状态'], data['日期']) == ('未做', '')

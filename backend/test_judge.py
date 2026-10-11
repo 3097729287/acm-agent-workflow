@@ -35,7 +35,8 @@ class JudgeTests(unittest.TestCase):
     def test_samples_never_claim_ac_and_run_never_claims_ac(self):
         code='#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}'
         self.assertEqual(self.execute(code)['verdict'],'SAMPLE_PASS')
-        self.assertEqual(self.execute(code,FixtureAssets('local'))['verdict'],'AC')
+        # 2026-10-10：本地审核题全对也只记样例通过，AC 只能来自原站官方回执。
+        self.assertEqual(self.execute(code,FixtureAssets('local'))['verdict'],'SAMPLE_PASS')
         value=self.execute(code,FixtureAssets('local'),mode='run',input_text='8 9')
         self.assertEqual(value['verdict'],'RUN_OK');self.assertEqual(value['output'],'17')
     def test_wrong_answer_compile_error_runtime_error(self):
@@ -54,13 +55,25 @@ class JudgeTests(unittest.TestCase):
         value=self.execute('#include <cstdlib>\nint main(){volatile char *p=(char*)malloc(128*1024*1024);if(!p)return 12;for(int i=0;i<128*1024*1024;i+=4096)p[i]=1;}',FixtureAssets(memory_mb=16))
         self.assertEqual(value['verdict'],'MLE',value)
         self.assertIsNotNone(value['memoryKb'])
+    def test_child_suppresses_error_dialogs_and_restores_host_mode(self):
+        kernel=judge._kernel();previous=kernel.GetErrorMode()
+        source='#include <windows.h>\n#include <cstdio>\nint main(){printf("%u",GetErrorMode());}'
+        value=self.execute(source,mode='run',input_text='probe')
+        self.assertEqual(value['verdict'],'RUN_OK',value)
+        self.assertEqual(int(value['output'])&judge._NO_ERROR_DIALOGS,judge._NO_ERROR_DIALOGS)
+        self.assertEqual(kernel.GetErrorMode(),previous)
+    def test_loader_memory_failure_returns_without_dialog(self):
+        started=time.monotonic()
+        value=self.execute('int main(){return 0;}',FixtureAssets(time_ms=1500,memory_mb=1))
+        self.assertEqual(value['verdict'],'MLE',value)
+        self.assertLess(time.monotonic()-started,10)
     def test_nonunique_without_checker_is_not_false_wa(self):
         fixture=FixtureAssets();fixture.data['nonunique']=True
         value=self.execute('#include <iostream>\nint main(){std::cout<<6;}',fixture)
         self.assertEqual(value['verdict'],'ERROR')
     def test_checker_accepts_alternate_valid_output(self):
         fixture=FixtureAssets('local',checker=lambda inp,out,expected:out.strip() in ('5','05'))
-        self.assertEqual(self.execute('#include <iostream>\nint main(){std::cout<<"05";}',fixture)['verdict'],'AC')
+        self.assertEqual(self.execute('#include <iostream>\nint main(){std::cout<<"05";}',fixture)['verdict'],'SAMPLE_PASS')
 
 class ProfileTests(unittest.TestCase):
     def test_constraint_checker_rejects_invalid_and_accepts_alternate(self):
@@ -95,7 +108,7 @@ class ProfileTests(unittest.TestCase):
                     self.assertTrue(sources,identity)
                     value=engine.execute(identity,sources[-1])
                     print(identity,value['verdict'],value['passed'],value['total'],value['timeMs'],value['memoryKb'],flush=True)
-                    self.assertEqual(value['verdict'],'AC',value)
+                    self.assertEqual(value['verdict'],'SAMPLE_PASS',value)
             self.assertEqual(list((Path(work)/'compiler').iterdir()),[])
         self.assertEqual(before,hashlib.sha256(LIBRARY_SEED.read_bytes()).hexdigest())
 

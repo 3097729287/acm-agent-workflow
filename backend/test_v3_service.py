@@ -19,12 +19,14 @@ class RemovalInsightsTests(unittest.TestCase):
     setUp = fixtures.ServiceTests.setUp
     tearDown = fixtures.ServiceTests.tearDown
     completed = fixtures.ServiceTests.completed
+    accept = fixtures.ServiceTests.accept
     contest = fixtures.ServiceTests.contest
 
     def test_remove_retains_code_evidence_and_rejoin(self):
         self.service.save_draft("fixture::A", "my draft")
-        result = self.completed()
-        job_id = result["submission"]["id"]
+        self.service.start_training("fixture::A")
+        evidence = self.accept(code="AC")
+        job_id = evidence["id"]
         self.clock.advance(days=8)
         self.assertEqual(self.service.workspace()["summary"]["due"], 1)
         self.assertEqual(self.service.remove_training("fixture::A")["workspace"]["summary"]["total"], 0)
@@ -33,8 +35,7 @@ class RemovalInsightsTests(unittest.TestCase):
         self.assertEqual(self.service.problem("fixture::A")["draft"], "my draft")
         insight = self.service.insights()
         self.assertEqual(insight["summary"]["active"], 0)
-        self.assertEqual(insight["summary"]["localAccepted"], 1)
-        self.assertEqual(insight["activity"][0]["accepted"], 1)
+        self.assertEqual(insight["summary"]["officialSolved"], 1)
         self.assertEqual(insight["knowledge"][0]["due"], 0)
         joined = self.service.start_training("fixture::A")["workspace"]
         self.assertTrue(joined["training"][0]["accepted"])
@@ -42,7 +43,7 @@ class RemovalInsightsTests(unittest.TestCase):
 
     def test_remove_last_set_member_and_rejoin_original_set(self):
         original = self.service.start_practice_set("fixture")["set"]
-        self.completed()
+        self.accept()
         for identity in original["ids"]:
             self.service.remove_training(identity)
         self.assertEqual(self.service.workspace()["sets"], [])
@@ -64,7 +65,7 @@ class RemovalInsightsTests(unittest.TestCase):
         self.assertEqual(error.exception.status, 409)
 
     def test_finished_genuine_submission_reactivates(self):
-        self.completed()
+        self.accept()
         self.service.remove_training("fixture::A")
         self.completed(code="WA")
         self.assertTrue(self.service.workspace()["training"][0]["accepted"])
@@ -85,7 +86,8 @@ class RemovalInsightsTests(unittest.TestCase):
     def test_archive_replaces_remote_identity_preserves_acceptance_and_code(self):
         self.library.rows[0].update(url="https://codeforces.com/contest/123/problem/A", source="remote")
         self.service.save_draft("fixture::A", "retained code")
-        self.completed()
+        self.service.start_training("fixture::A")
+        self.accept()
         archived = dict(self.library.rows[0], id="archive::A", source="archive")
         self.library.rows.append(archived)
         self.service.start_training("archive::A")
@@ -96,22 +98,23 @@ class RemovalInsightsTests(unittest.TestCase):
         self.assertEqual(self.service.problem("archive::A")["draft"], "retained code")
         self.assertEqual(len(self.service.submissions("archive::A")["submissions"]), 1)
         self.service.mark_solution_seen("archive::A")
-        self.completed("fixture::A", code="AC new")
         self.assertEqual(self.service.workspace()["training"][0]["queue"], "rewrite")
         self.service.remove_training("archive::A")
         self.assertEqual(self.service.workspace()["summary"]["total"], 0)
-        self.assertEqual(self.service.insights()["summary"]["localAccepted"], 1)
+        self.assertEqual(self.service.insights()["summary"]["officialSolved"], 1)
+        # 1500 以下官方首次 AC = 100 XP。
         self.assertEqual(self.service.insights()["growth"]["xp"], 100)
         self.service.start_training("archive::A")
         self.assertEqual(self.service.workspace()["summary"]["accepted"], 1)
 
     def test_remove_persists_after_restart_and_old_schema_migrates(self):
-        self.completed()
+        self.service.start_training("fixture::A")
+        self.accept()
         self.service.remove_training("fixture::A")
         self.service.close()
         self.service = fixtures.TrainingService(self.library, self.db, self.assets, self.judge, self.clock, self.root / "backups")
         self.assertEqual(self.service.workspace()["summary"]["total"], 0)
-        self.assertEqual(self.service.insights()["summary"]["localAccepted"], 1)
+        self.assertEqual(self.service.insights()["summary"]["officialSolved"], 1)
         self.service.start_training("fixture::A")
         self.service.close()
         import sqlite3
@@ -125,21 +128,27 @@ class RemovalInsightsTests(unittest.TestCase):
         self.assertEqual(len(self.service.submissions()["submissions"]), 1)
 
     def test_samples_runs_repeated_same_code_do_not_inflate_xp(self):
+        # 本地运行/提交全对只算样例通过，永不产生 XP；XP 只来自官方 AC。
         self.completed(mode="run")
         self.completed("fixture::H")
         before = self.service.insights()
         self.assertEqual(before["growth"]["xp"], 0)
         self.assertEqual(before["summary"]["submissions"], 1)
+        self.assertEqual(before["summary"]["samplePassed"], 1)
         self.completed()
         self.completed()
         self.clock.advance(days=2)
         self.completed()
         after = self.service.insights()
-        self.assertEqual(after["growth"]["xp"], 100)
-        self.assertEqual(after["summary"]["localAccepted"], 1)
-        self.assertEqual(after["summary"]["samplePassed"], 1)
-        self.assertEqual(after["activity"][0]["accepted"], 1)
+        self.assertEqual(after["growth"]["xp"], 0)
+        self.assertEqual(after["summary"]["officialSolved"], 0)
+        self.assertEqual(after["summary"]["samplePassed"], 2)
         self.assertEqual(after["assessment"]["rating"], None)
+        # 官方 AC 才加经验，重复同题只加一次。
+        self.accept()
+        self.assertEqual(self.service.insights()["growth"]["xp"], 100)
+        self.accept(submission_id=6001)
+        self.assertEqual(self.service.insights()["growth"]["xp"], 100)
 
     def test_official_evidence_exact_match_only_no_unknown_tags(self):
         self.library.rows[0]["url"] = "https://codeforces.com/contest/123/problem/A"
@@ -152,30 +161,38 @@ class RemovalInsightsTests(unittest.TestCase):
         self.assertFalse(any(row["name"] in {"INVENTED", "UNKNOWN"} for row in insights["knowledge"]))
         self.assertEqual(sum(row["officialAccepted"] for row in insights["knowledge"]), 1)
 
-    def test_review_xp_requires_24_hours_and_copied_code_is_not_independent(self):
-        self.completed()
+    def test_review_xp_removed_and_solution_seen_not_independent(self):
+        # 取消本地复习 XP；官方重复同题也不重复加经验。
+        self.service.start_training("fixture::A")
+        self.accept()
         self.clock.advance(hours=23)
-        self.completed(code="AC second")
+        self.accept(submission_id=6101)
         self.assertEqual(self.service.insights()["growth"]["xp"], 100)
         self.clock.advance(hours=2)
-        self.completed(code="AC third")
-        self.completed(code="AC fourth")
-        self.assertEqual(self.service.insights()["growth"]["xp"], 120)
+        self.accept(submission_id=6102)
+        self.accept(submission_id=6103)
+        self.assertEqual(self.service.insights()["growth"]["xp"], 100)
+        # 只有未看题解的官方 AC 算独立完成证据（A 算，B 不算）。
         self.service.start_training("fixture::B")
         self.service.mark_solution_seen("fixture::B")
-        self.completed("fixture::B", code="AC copied")
+        self.clock.advance(seconds=1)
+        self.accept("fixture::B", submission_id=6201)
         self.clock.advance(days=2)
-        self.completed("fixture::B", code="AC copied")
+        self.accept("fixture::B", submission_id=6202)
         self.assertEqual(self.service.insights()["assessment"]["evidenceCount"], 1)
 
     def test_independent_estimate_requires_five_excludes_solution_seen(self):
-        for identity in ("fixture::A", "fixture::B", "fixture::C", "fixture::D"):
-            self.completed(identity)
+        for index, identity in enumerate(("fixture::A", "fixture::B", "fixture::C", "fixture::D")):
+            self.service.start_training(identity)
+            self.accept(identity, submission_id=6300 + index)
         self.service.start_training("fixture::E")
         self.service.mark_solution_seen("fixture::E")
-        self.completed("fixture::E")
+        self.clock.advance(seconds=1)
+        self.accept("fixture::E", submission_id=6401)
         self.assertIsNone(self.service.insights()["assessment"]["rating"])
-        self.completed("fixture::F")
+        self.service.start_training("fixture::F")
+        self.clock.advance(seconds=1)
+        self.accept("fixture::F", submission_id=6402)
         assessment = self.service.insights()["assessment"]
         self.assertEqual(assessment["evidenceCount"], 5)
         self.assertEqual(assessment["rating"], 1300)
