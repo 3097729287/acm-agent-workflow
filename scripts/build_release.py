@@ -78,6 +78,9 @@ def assemble(args):
     shutil.copy2(ROOT / 'desktop' / 'official_languages.js', package / 'official_languages.js')
     shutil.copy2(ROOT / 'desktop' / 'official_nowcoder.js', package / 'official_nowcoder.js')
     shutil.copy2(ROOT / 'desktop' / 'official_luogu.js', package / 'official_luogu.js')
+    shutil.copy2(ROOT / 'desktop' / 'official_page.js', package / 'official_page.js')
+    from build_browser_extension import build as build_browser_extension
+    build_browser_extension(package / 'browser-extension')
     shutil.copy2(ROOT / 'desktop' / 'tb.ico', package / 'tb.ico')
     for name in ('VERSION', 'LICENSE', 'THIRDPARTY.md', 'TOOLCHAIN-SOURCES.md', 'third-party-inventory.json'):
         shutil.copy2(ROOT / name, package / name)

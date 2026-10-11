@@ -1,13 +1,14 @@
 // Observe the original site's requests without replacing submit or judge behavior.
 // Protocol: Nowcoder public terminal bundle 2.0.114 (2026-10-10).
-function installNowcoderReceipts(ctx) {
+function installNowcoderReceipts(ctx, report) {
   if (ctx.platform !== '牛客' || location.hostname !== 'ac.nowcoder.com') return null;
   if (window.__tbNowcoder?.sessionId === ctx.sessionId) return window.__tbNowcoder;
   const state = { sessionId: ctx.sessionId, armed: false, pending: null, receipt: null, early: [] };
   window.__tbNowcoder = state;
   const notify = value => {
     state.receipt = value;
-    chrome.webview.postMessage(JSON.stringify({ tbOfficial: true, sessionId: ctx.sessionId, ...value }));
+    if (report) report(value);
+    else chrome.webview.postMessage(JSON.stringify({ tbOfficial: true, sessionId: ctx.sessionId, ...value }));
   };
   const textCode = value => String(value || '').replace(/\r\n/g, '\n').trim();
   const fields = body => {
@@ -25,7 +26,7 @@ function installNowcoderReceipts(ctx) {
   const statusPaths = new Set(['/status', '/api/service/judge/submit-status']);
   const id = value => /^\d+$/.test(String(value ?? '')) && BigInt(value) > 0n ? String(value) : null;
   const requestInfo = (url, method, body) => {
-    const target = parseUrl(url), params = fields(body);
+    const target = parseUrl(url), params = { ...Object.fromEntries(target?.searchParams || []), ...fields(body) };
     if (!allowed(target)) return null;
     if (statusPaths.has(target.pathname)) return { kind: 'status', target, params: { ...Object.fromEntries(target.searchParams), ...params } };
     if (!state.armed || method.toUpperCase() !== 'POST' || !submitPaths.has(target.pathname)) return null;

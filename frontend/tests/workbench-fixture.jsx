@@ -36,7 +36,7 @@ async function api(path, body) {
   if (path === 'official/open' || path === 'official/submit') {
     const sessionId = `official-${Object.keys(fixture.officialSessions).length + 1}`;
     fixture.officialSessions[sessionId] = { id: body.id, code: body.code, status: 'loading' };
-    return { sessionId, status: 'loading', platform: 'AtCoder', message: '正在载入原站面板。' };
+    return { sessionId, status: 'loading', platform: 'AtCoder', message: '正在连接浏览器。' };
   }
   if (url.pathname === '/official/status') {
     const sessionId = url.searchParams.get('sessionId'), session = fixture.officialSessions[sessionId];
@@ -45,7 +45,7 @@ async function api(path, body) {
       session.saved = true;
       fixture.submissions.push({ id: sessionId, problemId: session.id, contestId: null, mode: 'submit', code: session.code, scope: 'official', verdict: fixture.officialVerdict || 'AC', finishedAt: new Date().toISOString(), submittedAt: new Date().toISOString(), message: '原站确认提交 #101' });
     }
-    return { sessionId, status, ...(status === 'finished' ? { verdict: fixture.officialVerdict || 'AC', submissionId: '101' } : {}), message: ({ needs_login: '请先登录授权。', ready: '登录成功，可以提交。', closed: '已返回训练。' })[status] || '等待官方结果。' };
+    return { sessionId, status, ...(status === 'finished' ? { verdict: fixture.officialVerdict || 'AC', submissionId: '101' } : {}), message: ({ needs_login: '请在浏览器登录原站。', ready: '登录成功，可以提交。', closed: '已返回训练。' })[status] || '等待官方结果。' };
   }
   if (path === 'official/close') {
     fixture.officialSessions[body.sessionId].status = 'closed';

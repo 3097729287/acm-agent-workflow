@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "TB 浏览器连接",
+  "version": "0.9.0",
+  "description": "让 TB 使用当前浏览器已登录的竞赛平台提交代码并接收评测结果。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiNX+sbJ597IDCbv8rl6ugvSDom6W1zpjilpdqdaH+Fq1rMlN6gXFOvzTI0Un5iLk0g6RnTzxhhOWiDcBUm2L6thrZImVUbcigDDG0geAtkGnNFfTBdNQb7rD5aZbFc/b8GQm3pPQEoCF4iaIfglb4LOYKDikXWxk6EfCkCqNLmuR5N4oVG4ibnNLIWOirWqlcvJWWj2OE03DEZk3p4ypTx6T0znEV0WkdBTaE0B82CY7pFa6l46k5Sg/mQe/VgexNs2j5nJuErFIYnEwtcGouafCzGuVY1BU7G3gV4rgtbh945ozVYPVhrSNXNMK4pNX43JEqKtniwiYNwaeq5/BewIDAQAB",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": {"service_worker": "worker.js"},
+  "content_scripts": [
+    {"matches": ["http://127.0.0.1/*"], "js": ["pair.js"], "run_at": "document_idle"},
+    {"matches": ["https://codeforces.com/*", "https://www.codeforces.com/*", "https://atcoder.jp/*", "https://ac.nowcoder.com/*", "https://www.luogu.com.cn/*", "https://luogu.com.cn/*"], "js": ["official.js", "main.js"], "world": "MAIN", "run_at": "document_start"},
+    {"matches": ["https://codeforces.com/*", "https://www.codeforces.com/*", "https://atcoder.jp/*", "https://ac.nowcoder.com/*", "https://www.nowcoder.com/*", "https://nowcoder.com/*", "https://www.luogu.com.cn/*", "https://luogu.com.cn/*", "https://login.luogu.com.cn/*"], "js": ["content.js"], "run_at": "document_start"}
+  ]
+}

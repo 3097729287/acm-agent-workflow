@@ -107,11 +107,11 @@ try {
   assert.equal(await page.getByRole('button', { name: '本地提交', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: '官方提交', exact: true }).count(), 0);
   await editor.press('Control+Enter');
-  await page.getByText('请先登录授权。', { exact: true }).waitFor();
+  await page.getByText('请在浏览器登录原站。', { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'official/submit').at(-1).body.code), 'reopened A final code');
   assert.equal(await page.evaluate(() => window.workbenchFixture.submissions.length), 3, 'submit never invokes local judging');
-  await page.getByRole('button', { name: '登录授权', exact: true }).click();
-  await page.getByText('请先登录授权。', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '在浏览器查看', exact: true }).click();
+  await page.getByText('请在浏览器登录原站。', { exact: true }).waitFor();
   assert.ok(await page.evaluate(() => window.workbenchFixture.calls.some(call => call.path === 'official/open')));
   assert.equal(await page.evaluate(() => window.workbenchFixture.progress.length), 0, 'login/opening never manufactures accepted progress');
   await page.evaluate(() => { window.workbenchFixture.officialStatus = 'ready'; });

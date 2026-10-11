@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def end_headers(self):
         origin = self.headers.get('Origin')
-        if origin in self.server.frontend_origins:
+        if origin in self.server.frontend_origins or getattr(self, '_browser_origin', None) == origin and origin:
             self.send_header('Access-Control-Allow-Origin', origin)
             self.send_header('Vary', 'Origin')
         super().end_headers()
@@ -53,6 +53,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         try:
             self.local_request()
+            if urlsplit(self.path).path == '/api/browser/exchange':
+                from browser_bridge import EXTENSION_ORIGIN
+                if self.headers.get('Origin') != EXTENSION_ORIGIN:
+                    raise APIError(403, '请求来源不匹配')
+                self._browser_origin = EXTENSION_ORIGIN
+                self.send_response(204)
+                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-TB-Browser, X-TB-Browser-Client')
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
             if self.headers.get('Origin') not in self.server.frontend_origins:
                 raise APIError(403, '请求来源不匹配')
             self.send_response(204)
@@ -85,6 +96,9 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self, writing=False):
         body_consumed = False
         try:
+            if urlsplit(self.path).path.startswith('/api/browser/'):
+                self.browser_dispatch(writing)
+                return
             self.local_request(writing)
             target = urlsplit(self.path)
             path = unquote(target.path)
@@ -164,7 +178,7 @@ class Handler(BaseHTTPRequestHandler):
                         training.assert_solution_unlocked(identity)
                     opener = self.server.official_submitter if path.endswith("/submit") else self.server.official_opener
                     if not callable(opener):
-                        raise APIError(503, "当前浏览器测试没有原生提交面板，请在 TB 桌面版打开")
+                        raise APIError(503, "请在 TB 桌面版连接浏览器提交")
                     url = row.get("url")
                     if not url:
                         url = training._asset_library().problem(identity).get("url")
@@ -175,11 +189,11 @@ class Handler(BaseHTTPRequestHandler):
                         opened = opener(url, code, row["title"])
                     value = opened if isinstance(opened, dict) else {"sessionId": opened, "platform": row.get("platform"), "url": url, "status": "opened"}
                     if not isinstance(value.get("sessionId"), str):
-                        raise APIError(503, "原生提交面板没有返回有效会话")
+                        raise APIError(503, "浏览器连接没有返回有效会话")
                     self.server.register_official_session(value["sessionId"], {"id": identity, "contestId": body.get("contestId"), "url": url, "code": code}, value)
                 elif path == "/api/official/close":
                     if not callable(self.server.official_closer):
-                        raise APIError(503, "当前浏览器没有原生官方面板")
+                        raise APIError(503, "浏览器提交服务尚未连接")
                     value = self.server.official_closer(body.get("sessionId"))
                 elif path == "/api/desktop/fullscreen":
                     if not callable(getattr(self.server, "desktop_fullscreen", None)):
@@ -252,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/official/status":
                 identity = parse_qs(target.query).get("sessionId", [None])[0]
                 if not callable(self.server.official_status):
-                    raise APIError(503, "当前浏览器没有原生官方面板")
+                    raise APIError(503, "浏览器提交服务尚未连接")
                 with self.server.training.lock:
                     session = self.server.official_sessions.get(identity)
                     if not session:
@@ -295,6 +309,40 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(500, {"error": "操作未完成：" + str(error)})
         except Exception:
             self.send_json(500, {"error": "操作未完成，请刷新后重试"})
+
+    def browser_dispatch(self, writing):
+        from browser_bridge import EXTENSION_ID, EXTENSION_ORIGIN
+        self.local_request()
+        path = urlsplit(self.path).path
+        if path == '/api/browser/setup' and not writing:
+            self.send_json(200, {'extensionPath': str(getattr(self.server, 'browser_extension_path', ''))})
+            return
+        if path != '/api/browser/exchange' or not writing:
+            raise APIError(404, '没有找到这个接口')
+        # Separate per-job capability: the browser never receives the app token.
+        origin = self.headers.get('Origin')
+        if origin not in (None, EXTENSION_ORIGIN) or self.headers.get('X-TB-Browser-Client') != EXTENSION_ID:
+            self.close_connection = True
+            raise APIError(403, '只接受 TB 浏览器连接扩展')
+        self._browser_origin = origin
+        bridge = getattr(self.server, 'browser_bridge', None)
+        if bridge is None:
+            self.close_connection = True
+            raise APIError(503, '请在 TB 桌面版连接浏览器')
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            size = 0
+        if not 0 < size <= 262144 or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+            self.close_connection = True
+            raise APIError(400, '浏览器请求格式无效')
+        try:
+            body = json.loads(self.rfile.read(size).decode('utf-8'))
+        except (ValueError, UnicodeError):
+            raise APIError(400, 'JSON 格式无效')
+        if not isinstance(body, dict):
+            raise APIError(400, '浏览器请求格式无效')
+        self.send_json(200, bridge.exchange(body, self.headers.get('X-TB-Browser', '')))
 
     def static(self, path):
         root = self.server.dist_dir

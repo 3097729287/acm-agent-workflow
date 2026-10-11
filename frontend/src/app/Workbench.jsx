@@ -22,8 +22,8 @@ const VERDICTS = {
   WA: '答案错误', TLE: '超时', MLE: '内存超限', RE: '运行错误',
   CE: '编译错误', OLE: '输出超限', ERROR: '评测不可用',
 };
-const OFFICIAL_STATES = { loading: '连接原站', needs_login: '需要登录授权', needs_verification: '需要完成验证', ready: '已连接，可提交', submitted: '正在提交', judging: '评测中', finished: '评测完成', error: '提交异常', closed: '会话已结束' };
-const OFFICIAL_TERMINAL = new Set(['finished', 'error', 'closed']);
+const OFFICIAL_STATES = { loading: '连接浏览器', needs_browser: '需要连接浏览器', needs_login: '请在浏览器登录', needs_verification: '请在浏览器验证', ready: '已连接，可提交', submitted: '等待原站受理', judging: '评测中', finished: '评测完成', unconfirmed: '尚未确认提交', error: '提交异常', closed: '会话已结束' };
+const OFFICIAL_TERMINAL = new Set(['finished', 'error', 'closed', 'unconfirmed']);
 
 // Serialize saves across mounts as well as edits. An older request must never
 // finish after a newer draft for the same problem and overwrite it on disk.
@@ -619,7 +619,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
 
     {sidePracticeLocked && !endedContest && <div className="wb-notice">这题正在模拟赛中，请进入考场运行与提交。</div>}
     {officialSession && !runningContest && <div className="wb-official-status" aria-label="原站提交状态"><div role="status"><strong>{OFFICIAL_STATES[officialSession.status] || '原站提交'}</strong><span>{officialSession.message}</span>{officialSession.submissionId && <span>提交 #{officialSession.submissionId}</span>}{officialSession.verdict && <b className={officialSession.verdict === 'AC' ? 'wb-receipt-ac' : ''}>{officialSession.verdict}</b>}</div><div className="wb-official-actions">
-      {['needs_login', 'needs_verification', 'error'].includes(officialSession.status) && <button type="button" className="wb-button" disabled={unavailable || openingOfficial} onClick={() => openOfficial('official/open')}>{officialSession.status === 'needs_verification' ? '完成验证' : '登录授权'}</button>}
+      {['needs_browser', 'needs_login', 'needs_verification', 'unconfirmed', 'error'].includes(officialSession.status) && <button type="button" className="wb-button" disabled={unavailable || openingOfficial} onClick={() => openOfficial('official/open')}>{officialSession.status === 'needs_browser' ? '连接浏览器' : '在浏览器查看'}</button>}
       {['finished', 'closed'].includes(officialSession.status) && <button type="button" className="wb-icon-button" aria-label="收起提交状态" onClick={() => setOfficialSession(null)}><ChevronUp size={14} /></button>}
     </div>{officialPollError && <p className="wb-poll-error" role="alert">{officialPollError}</p>}</div>}
     {actionError && <div className="wb-error-strip" role="alert"><span>{actionError}</span><button type="button" onClick={() => setActionError('')}>知道了</button></div>}

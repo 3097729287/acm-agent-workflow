@@ -1,10 +1,10 @@
 // Luogu Columba routes and RecordStatus, verified from /_lfe/config?version=0.
-function installLuoguReceipts(ctx) {
+function installLuoguReceipts(ctx, report) {
   if (ctx.platform !== '洛谷' || !['www.luogu.com.cn', 'luogu.com.cn'].includes(location.hostname)) return null;
   const pageData = () => { try { return JSON.parse(document.querySelector('#lentille-context')?.textContent || 'null'); } catch { return null; } };
   const owner = () => pageData()?.user?.uid || window._feInjection?.currentUser?.uid;
   const numericId = value => /^\d+$/.test(String(value ?? '')) && BigInt(value) > 0n ? String(value) : null;
-  const original = new URL(ctx.originalUrl), pid = original.pathname.split('/')[2];
+  const problem = () => new URL(ctx.originalUrl).pathname.split('/')[2];
   const previous = window.__tbLuogu;
   if (previous?.sessionId === ctx.sessionId) {
     if (!previous.pending && ctx.attempted && numericId(ctx.submissionId)) previous.pending = { id: String(ctx.submissionId), owner: numericId(owner()) };
@@ -14,7 +14,8 @@ function installLuoguReceipts(ctx) {
   if (ctx.attempted && numericId(ctx.submissionId)) state.pending = { id: String(ctx.submissionId), owner: numericId(owner()) };
   const notify = value => {
     state.receipt = value;
-    chrome.webview.postMessage(JSON.stringify({ tbOfficial: true, sessionId: ctx.sessionId, ...value }));
+    if (report) report(value);
+    else chrome.webview.postMessage(JSON.stringify({ tbOfficial: true, sessionId: ctx.sessionId, ...value }));
   };
   const parseUrl = value => { try { return new URL(value, location.href); } catch { return null; } };
   const fields = body => {
@@ -23,8 +24,8 @@ function installLuoguReceipts(ctx) {
   };
   const requestInfo = (url, method, body) => {
     const target = parseUrl(url), params = fields(body);
-    if (!state.armed || method.toUpperCase() !== 'POST' || target?.origin !== location.origin || target.pathname !== '/fe/api/problem/submit/' + pid) return null;
-    if (location.pathname !== original.pathname || String(params.code || '').replace(/\r\n/g, '\n').trim() !== ctx.code.replace(/\r\n/g, '\n').trim()) return null;
+    if (!state.armed || method.toUpperCase() !== 'POST' || target?.origin !== location.origin || target.pathname !== '/fe/api/problem/submit/' + problem()) return null;
+    if (location.pathname !== new URL(ctx.originalUrl).pathname || String(params.code || '').replace(/\r\n/g, '\n').trim() !== ctx.code.replace(/\r\n/g, '\n').trim()) return null;
     if (!numericId(owner()) || target.searchParams.has('contestId')) return null;
     return { owner: numericId(owner()) };
   };
@@ -44,7 +45,7 @@ function installLuoguReceipts(ctx) {
   };
   const inspectRecord = payload => {
     const record = payload?.data?.record || payload?.currentData?.record || payload?.record;
-    if (!state.pending || numericId(record?.id) !== state.pending.id || record.problem?.pid !== pid || numericId(record.user?.uid) !== state.pending.owner) return;
+    if (!state.pending || numericId(record?.id) !== state.pending.id || record.problem?.pid !== problem() || numericId(record.user?.uid) !== state.pending.owner) return;
     const verdict = { 2: 'CE', 3: 'OLE', 4: 'MLE', 5: 'TLE', 6: 'WA', 7: 'RE', 12: 'AC', 14: 'WA' }[record.status];
     if (verdict) notify({ status: 'finished', submissionId: state.pending.id, verdict,
       message: '洛谷确认本次提交 #' + state.pending.id + '：' + (record.status === 14 ? '未通过全部用例' : verdict) });
