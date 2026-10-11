@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { normalizeMarkdown } from '@/lib/normalizeMarkdown.js';
 import { normalizeStatement } from '@/lib/normalizeStatement.js';
+import { primeAcceptedSound, playAcceptedSound } from '@/lib/acceptedSound.js';
 import CodeEditor from '@/components/CodeEditor.jsx';
 import './Workbench.css';
 
@@ -17,11 +18,11 @@ const TEMPLATE = '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {
 const MAX_BYTES = 64 * 1024;
 const byteLength = value => new TextEncoder().encode(value).byteLength;
 const VERDICTS = {
-  QUEUED: '等待评测', RUNNING: '正在评测', AC: '官方 AC', SAMPLE_PASS: '样例通过', RUN_OK: '运行完成（未校验）',
+  QUEUED: '等待评测', RUNNING: '正在评测', AC: 'AC', SAMPLE_PASS: '样例通过', RUN_OK: '运行完成（未校验）',
   WA: '答案错误', TLE: '超时', MLE: '内存超限', RE: '运行错误',
   CE: '编译错误', OLE: '输出超限', ERROR: '评测不可用',
 };
-const OFFICIAL_STATES = { loading: '连接官方', needs_login: '需要登录授权', needs_verification: '需要完成验证', ready: '已连接，可提交', submitted: '正在提交', judging: '官方评测中', finished: '官方评测完成', error: '提交异常', closed: '会话已结束' };
+const OFFICIAL_STATES = { loading: '连接原站', needs_login: '需要登录授权', needs_verification: '需要完成验证', ready: '已连接，可提交', submitted: '正在提交', judging: '评测中', finished: '评测完成', error: '提交异常', closed: '会话已结束' };
 const OFFICIAL_TERMINAL = new Set(['finished', 'error', 'closed']);
 
 // Serialize saves across mounts as well as edits. An older request must never
@@ -105,7 +106,8 @@ function requestBody(record, extra = {}) {
 
 function Verdict({ submission }) {
   const pending = submission && submissionPending(submission);
-  return <span className={`wb-verdict wb-verdict-${String(submission?.verdict || 'none').toLowerCase()}`}>
+  const accepted = submission?.verdict === 'AC' && submission.scope === 'official';
+  return <span className={`wb-verdict wb-verdict-${String(submission?.verdict || 'none').toLowerCase()}${accepted ? ' wb-verdict-confirmed' : ''}`}>
     {pending && <LoaderCircle size={13} className="wb-spinner" aria-hidden="true" />}
     {submission?.verdict === 'AC' && (!submission.scope || submission.scope === 'official') && <Check size={13} aria-hidden="true" />}
     {verdictText(submission)}
@@ -369,6 +371,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
   const announceOfficialCompletion = useCallback(async (session, record) => {
     if (session.status !== 'finished' || !session.verdict || !session.submissionId || officialReported.current.has(session.sessionId)) return;
     officialReported.current.add(session.sessionId);
+    if (session.verdict === 'AC') playAcceptedSound(`${session.platform || record.id}:${session.submissionId}`);
     try {
       const workspace = await apiRef.current('workspace');
       if (isActive(record)) callbacks.current.onProgress?.(workspace);
@@ -478,6 +481,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
       setActionError(!record.code.trim() ? '先写入代码，再提交到原站。' : '代码超过 64 KiB，请缩短后再提交。');
       return;
     }
+    if (path === 'official/submit') primeAcceptedSound();
     record.officialBusy = true;
     setOpeningOfficial(true); setActionError(''); setOfficialPollError('');
     saveRecord(record);
@@ -614,7 +618,7 @@ export default function Workbench({ problemId, contest = null, api, onProgress, 
     </div>
 
     {sidePracticeLocked && !endedContest && <div className="wb-notice">这题正在模拟赛中，请进入考场运行与提交。</div>}
-    {officialSession && !runningContest && <div className="wb-official-status" aria-label="原站提交状态"><div role="status"><strong>{OFFICIAL_STATES[officialSession.status] || '官方提交'}</strong><span>{officialSession.message}</span>{officialSession.submissionId && <span>提交 #{officialSession.submissionId}</span>}{officialSession.verdict && <b>官方 {officialSession.verdict}</b>}</div><div className="wb-official-actions">
+    {officialSession && !runningContest && <div className="wb-official-status" aria-label="原站提交状态"><div role="status"><strong>{OFFICIAL_STATES[officialSession.status] || '原站提交'}</strong><span>{officialSession.message}</span>{officialSession.submissionId && <span>提交 #{officialSession.submissionId}</span>}{officialSession.verdict && <b className={officialSession.verdict === 'AC' ? 'wb-receipt-ac' : ''}>{officialSession.verdict}</b>}</div><div className="wb-official-actions">
       {['needs_login', 'needs_verification', 'error'].includes(officialSession.status) && <button type="button" className="wb-button" disabled={unavailable || openingOfficial} onClick={() => openOfficial('official/open')}>{officialSession.status === 'needs_verification' ? '完成验证' : '登录授权'}</button>}
       {['finished', 'closed'].includes(officialSession.status) && <button type="button" className="wb-icon-button" aria-label="收起提交状态" onClick={() => setOfficialSession(null)}><ChevronUp size={14} /></button>}
     </div>{officialPollError && <p className="wb-poll-error" role="alert">{officialPollError}</p>}</div>}

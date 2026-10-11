@@ -12,9 +12,9 @@ const messages=[],location=new URL('https://ac.nowcoder.com/acm/contest/127263/B
 const ctx={sessionId:'fixture',platform:'牛客',originalUrl:location.href,code:'int main(){}'};
 let responses=[];
 const window={pageInfo:{contestId:'127263',questionId:'11604979'},globalInfo:{ownerId:12345},fetch:async(url)=>{
- const value=responses.shift();return {ok:true,url:new URL(url,location).href,clone(){return {json:async()=>value}}};
+ const value=responses.shift();return {ok:true,url:new URL(url,location).href,json:async()=>value,clone(){return {json:async()=>value}}};
 }};
-const box={window,location,URL,URLSearchParams,Promise,chrome:{webview:{postMessage(value){messages.push(JSON.parse(value))}}},normal:text=>({'答案错误':'WA','运行超时':'TLE','AC':'AC'}[text]||null)};
+const box={window,location,URL,URLSearchParams,Promise,AbortSignal,chrome:{webview:{postMessage(value){messages.push(JSON.parse(value))}}},normal:text=>({'答案错误':'WA','运行超时':'TLE','AC':'AC'}[text]||null)};
 vm.runInNewContext(observer+';window.state=installNowcoderReceipts('+JSON.stringify(ctx)+');',box);
 window.state.armed=true;
 async function request(url,body,response){responses.push(response);await window.fetch(url,{method:body?'POST':'GET',...(body?{body:JSON.stringify(body)}:{})});await new Promise(r=>setImmediate(r));}
@@ -40,7 +40,27 @@ const body={questionId:'11604979',content:ctx.code,submitType:1,userId:12345,app
  await request('/submit_cd',{questionId:'11604979',content:ctx.code},{code:0,data:22});
  await request('/status?submissionId=22',null,{code:0,data:{status:5}});
  assert.equal(messages.at(-1).submissionId,'22');
- console.log(JSON.stringify({ok:true,legacy:true,modern:true,rejectedOldOtherTaskCodeOwnerAndSelfTest:true}));
+ // Current production terminal uses the cross-origin Victorinox judge API.
+ window.state.pending=null;
+ const production='https://victorinox.nowcoder.com';
+ await request(production+'/api/service/judge/submit',{...body,appId:6,tagId:4,token:'page-only-token'},{code:0,data:31});
+ assert.equal(messages.at(-1).submissionId,'31');
+ const count=messages.length;
+ await request('/api/service/judge/submit-status?id=31&submitType=1&userId=12345&appId=6&tagId=4',null,{code:0,data:{status:5}});
+ await request('https://victorinox.nowcoder.com.evil.test/api/service/judge/submit-status?id=31',null,{code:0,data:{status:5}});
+ assert.equal(messages.length,count,'receipt must come from the submitted-to production origin');
+ // Desktop polling uses the confirmed ID and metadata, with no second POST.
+ responses.push({code:0,data:{status:5}});await window.state.poll();
+ assert.equal(messages.at(-1).verdict,'AC');assert.equal(messages.at(-1).submissionId,'31');
+ assert.ok(!JSON.stringify(messages).includes('page-only-token'));
+ // Early status may race ahead of the submit response, on that same origin.
+ window.state.pending=null;
+ await request(production+'/api/service/judge/submit-status?id=32&submitType=1&userId=12345&appId=6&tagId=4',null,{code:0,data:{status:5}});
+ await request(production+'/api/service/judge/submit',{...body,appId:6,tagId:4},{code:0,data:32});
+ assert.equal(messages.at(-1).verdict,'AC');assert.equal(messages.at(-1).submissionId,'32');
+ await request(production+'/api/service/judge/submit',body,{code:1125,msg:'验证码错误'});
+ assert.equal(messages.at(-1).status,'needs_verification');assert.equal(messages.at(-1).attempted,false);
+ console.log(JSON.stringify({ok:true,legacy:true,modern:true,crossOriginProduction:true,hostPolling:true,rejectedOldOtherTaskCodeOwnerAndSelfTest:true}));
 })().catch(e=>{console.error(e);process.exitCode=1});
 '''
 

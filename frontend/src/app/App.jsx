@@ -178,7 +178,7 @@ function Verdict({ value, accepted = false, scope }) {
   return (
     <span className={"verdict " + verdictTone(current)}>
       <span />
-      {current === 'AC' && scope === 'official' ? '官方 AC' : verdictLabel(current)}
+      {verdictLabel(current)}
       {accepted && current !== "AC" && (
         <Check
           size={11}

@@ -33,6 +33,31 @@ process.stdout.write(JSON.stringify(result));
 '''
 
 class ReceiptInspectorTests(unittest.TestCase):
+    def test_hidden_cf_verdict_uses_fresh_html_when_api_is_unavailable(self):
+        session = {'sessionId':'fixture', 'platform':'Codeforces', 'problem':'A', 'code':'int main(){}',
+                   'originalUrl':'https://codeforces.com/problemset/problem/123/A', 'attempted':True,
+                   'baseline':['100','110'], 'baselineKnown':True, 'baselineOwner':'owner'}
+        script = r'''
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const payload=JSON.parse(fs.readFileSync(0,'utf8')),messages=[],requests=[];
+const location=new URL('https://codeforces.com/contest/123/my');
+const a=href=>({getAttribute:()=>href});
+const row=(id,task,owner,verdict)=>({querySelectorAll(selector){return selector==='a[href]'?[a('/contest/123/submission/'+id),a(task),a('/profile/'+owner)]:[{getAttribute:()=>null,textContent:verdict}]}});
+const blank={title:'My submissions',body:{innerText:'',textContent:''},querySelector:()=>null,querySelectorAll:()=>[]};
+const rows=[row('105','/contest/123/problem/A','owner','Accepted'),row('111','/contest/123/problem/B','owner','Accepted'),row('112','/contest/123/problem/A','other','Accepted'),row('113','/contest/123/problem/A','owner','Wrong Answer')];
+const fresh={...blank,querySelector:selector=>selector==='table.status-frame-datatable'?{}:null,querySelectorAll:selector=>selector==='tr'?rows:[]};
+vm.runInNewContext(payload.script,{URL,AbortSignal,location,document:blank,DOMParser:class{parseFromString(){return fresh}},fetch:async path=>{
+ requests.push(path);assert.ok(!path.startsWith('/api/'),'fresh HTML works without public API');
+ return {ok:true,url:'https://codeforces.com/problemset/my',text:async()=>'<fresh receipt>'};
+},chrome:{webview:{postMessage(value){messages.push(JSON.parse(value))}}}});
+setTimeout(()=>process.stdout.write(JSON.stringify({messages,requests})),20);
+'''
+        value = subprocess.run([NODE,'-e',script], input=json.dumps({'script':page_script(session)}),
+                               text=True,encoding='utf-8',capture_output=True,check=True,timeout=10)
+        result=json.loads(value.stdout)
+        self.assertEqual((result['messages'][0]['submissionId'],result['messages'][0]['verdict']),('113','WA'))
+        self.assertEqual(result['requests'],['/contest/123/my'])
+
     def api_inspect(self, records, **overrides):
         session={'sessionId':'fixture','platform':'Codeforces','problem':'A','code':'int main(){}',
                  'originalUrl':'https://codeforces.com/problemset/problem/123/A','attempted':True,

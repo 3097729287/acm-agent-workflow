@@ -1,7 +1,7 @@
 // Observe the original site's requests without replacing submit or judge behavior.
 // Protocol: Nowcoder public terminal bundle 2.0.114 (2026-10-10).
 function installNowcoderReceipts(ctx) {
-  if (ctx.platform !== '牛客') return null;
+  if (ctx.platform !== '牛客' || location.hostname !== 'ac.nowcoder.com') return null;
   if (window.__tbNowcoder?.sessionId === ctx.sessionId) return window.__tbNowcoder;
   const state = { sessionId: ctx.sessionId, armed: false, pending: null, receipt: null, early: [] };
   window.__tbNowcoder = state;
@@ -18,7 +18,9 @@ function installNowcoderReceipts(ctx) {
     try { return Object.fromEntries(body.entries()); } catch { return {}; }
   };
   const parseUrl = value => { try { return new URL(value, location.href); } catch { return null; } };
-  const allowed = url => url && url.origin === location.origin && location.hostname === 'ac.nowcoder.com';
+  // The current terminal sends judging requests to the production editor API.
+  // These are the two verified production origins, not arbitrary subdomains.
+  const allowed = url => url && ['https://ac.nowcoder.com', 'https://victorinox.nowcoder.com'].includes(url.origin);
   const submitPaths = new Set(['/submit_cd', '/api/service/judge/submit']);
   const statusPaths = new Set(['/status', '/api/service/judge/submit-status']);
   const id = value => /^\d+$/.test(String(value ?? '')) && BigInt(value) > 0n ? String(value) : null;
@@ -33,7 +35,8 @@ function installNowcoderReceipts(ctx) {
     if (target.pathname === '/api/service/judge/submit' && String(params.submitType) !== '1') return null;
     if (params.selfType != null || params.selfInputData != null || params.input != null || params.isSelfTest) return null;
     const owner = id(window.globalInfo?.ownerId);
-    if (params.userId != null && (!owner || String(params.userId) !== owner)) return null;
+    const submitOwner = id(info.teamId) || owner;
+    if (params.userId != null && (!submitOwner || String(params.userId) !== submitOwner)) return null;
     return { kind: 'submit', target, params, owner };
   };
   // Evaluate a status payload against the confirmed pending submission.
@@ -53,12 +56,28 @@ function installNowcoderReceipts(ctx) {
     return data.status === 5 ? 'AC' : failure && failure !== 'AC' && failure !== 'JUDGING' ? failure : null;
   };
   const observe = (request, value) => {
-    if (!request || !value || typeof value !== 'object' || value.code !== 0 || value.error) return;
+    if (!request || !value || typeof value !== 'object') return;
+    if (request.kind === 'submit' && Number.isInteger(value.code) && (value.code !== 0 || value.error)) {
+      state.armed = false;
+      const verification = value.code === 1125 || /captcha|验证码|验证/.test(String(value.errorType || '') + ' ' + String(value.msg || ''));
+      notify({ status: verification ? 'needs_verification' : 'error', attempted: false,
+        message: verification ? '牛客要求验证，请打开原站完成验证后再提交。' : '牛客未受理代码：' + String(value.msg || '请打开原站检查提交要求。').slice(0,160) });
+      return;
+    }
+    if (value.code !== 0 || value.error) return;
     const data = value.data;
     if (request.kind === 'submit') {
       const submissionId = id(typeof data === 'object' ? data?.submissionId ?? data?.id : data);
       if (!submissionId) return;
-      state.pending = { submissionId, owner: request.owner, userId: request.params.userId, appId: request.params.appId, tagId: request.params.tagId };
+      state.pending = { submissionId, owner: request.owner, origin: request.target.origin, userId: request.params.userId, appId: request.params.appId, tagId: request.params.tagId };
+      // Keep the site's short-lived judge token in this page only. It is never
+      // sent to TB, persisted, logged, or used to submit a second request.
+      const modern = request.target.pathname === '/api/service/judge/submit';
+      const query = modern ? { id: submissionId, submitType: 1 } : { submissionId };
+      for (const key of ['userId', 'appId', 'tagId', 'subTagId', 'token']) {
+        if (request.params[key] != null) query[key] = request.params[key];
+      }
+      state.statusUrl = new URL((modern ? '/api/service/judge/submit-status' : '/status') + '?' + new URLSearchParams(query), request.target.origin).href;
       state.attempted = true;
       // 受理时刻随 judging 消息一起发出：宿主据此持久化 pending，并用它（而非
       // 收到回执的时间）记 submitted_at。不额外多发消息，保持既有消息条数契约。
@@ -66,7 +85,7 @@ function installNowcoderReceipts(ctx) {
       // Replay any status payload that arrived before we knew the submission ID.
       const early = state.early; state.early = [];
       for (const item of early) {
-        if (id(item.params.submissionId ?? item.params.id) !== submissionId) continue;
+        if (item.origin !== state.pending.origin || id(item.params.submissionId ?? item.params.id) !== submissionId) continue;
         const verdict = evaluateStatus(state.pending, item.params, item.data);
         if (verdict) { notify({ status: 'finished', submissionId, verdict, message: '牛客确认本次提交 #' + submissionId + '：' + verdict }); break; }
       }
@@ -77,16 +96,30 @@ function installNowcoderReceipts(ctx) {
     // instead of the client hanging in "judging" forever.
     if (!state.pending) {
       if (id(request.params.submissionId ?? request.params.id)) {
-        state.early.push({ params: request.params, data });
+        state.early.push({ origin: request.target.origin, params: request.params, data });
         if (state.early.length > 10) state.early.shift();
       }
       return;
     }
+    if (request.target.origin !== state.pending.origin) return;
     const verdict = evaluateStatus(state.pending, request.params, data);
     if (verdict) notify({ status: 'finished', submissionId: state.pending.submissionId, verdict, message: '牛客确认本次提交 #' + state.pending.submissionId + '：' + verdict });
   };
-  if (typeof window.fetch === 'function') {
-    const originalFetch = window.fetch;
+  const originalFetch = window.fetch;
+  // Called by the desktop watcher, so receipt collection does not depend on
+  // timers or visibility of the site's background console.
+  state.poll = async () => {
+    if (!state.statusUrl || state.polling || state.receipt?.status === 'finished' || typeof originalFetch !== 'function') return;
+    state.polling = true;
+    try {
+      const result = await originalFetch.call(window, state.statusUrl, { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      const target = parseUrl(result.url || state.statusUrl);
+      if (result.ok && allowed(target) && target.origin === state.pending?.origin) {
+        observe(requestInfo(state.statusUrl, 'GET'), await result.json());
+      }
+    } catch {} finally { state.polling = false; }
+  };
+  if (typeof originalFetch === 'function') {
     window.fetch = function(resource, options) {
       const url = typeof resource === 'string' || resource instanceof URL ? String(resource) : resource.url;
       const method = options?.method || resource?.method || 'GET';

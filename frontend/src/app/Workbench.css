@@ -611,6 +611,20 @@
 .wb-verdict-ac {
   color: var(--success);
 }
+.wb-result-summary > .wb-verdict-confirmed {
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 36px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.wb-result-summary > .wb-verdict-confirmed svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 2.5;
+}
+.wb-official-status b.wb-receipt-ac { color: var(--success); font-size: 20px; }
 .wb-verdict-sample_pass {
   color: var(--accent);
 }

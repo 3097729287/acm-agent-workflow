@@ -33,24 +33,37 @@ def submission_target(url):
         problem=path.rsplit('/',1)[-1]
     elif not re.fullmatch(r'/problem/[A-Za-z0-9_]+',path):raise ValueError('洛谷题目地址无效')
     query=urlencode({'taskScreenName':problem}) if platform=='AtCoder' else ''
-    return {'platform':platform,'url':urlunsplit(('https',p.netloc,path,query,'submit' if platform=='洛谷' else '')),'problem':problem,'originalUrl':url}
+    origin = urlunsplit(('https', p.netloc, '', '', ''))
+    login_path = {'Codeforces': '/enter', 'AtCoder': '/login', '牛客': '/login', '洛谷': '/auth/login'}[platform]
+    return {'platform':platform,'url':urlunsplit(('https',p.netloc,path,query,'submit' if platform=='洛谷' else '')),
+            'loginUrl': origin + login_path, 'problem':problem,'originalUrl':url}
 
 def page_script(session,action='inspect'):
-    context=json.dumps({k:session.get(k) for k in ('sessionId','platform','problem','code','originalUrl','attempted','baseline','baselineKnown','baselineOwner')},ensure_ascii=True)
+    context=json.dumps({k:session.get(k) for k in ('sessionId','platform','problem','code','originalUrl','attempted','baseline','baselineKnown','baselineOwner','submissionId')},ensure_ascii=True)
     asset_root=Path(sys.executable).resolve().parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent
     languages=(asset_root/'official_languages.js').read_text(encoding='utf-8')
     nowcoder=(asset_root/'official_nowcoder.js').read_text(encoding='utf-8')
+    luogu=(asset_root/'official_luogu.js').read_text(encoding='utf-8')
     return r'''(()=>{
 const ctx=CONTEXT,action=ACTION;
+if(typeof window!=='undefined'&&(window!==window.top||!['codeforces.com','www.codeforces.com','atcoder.jp','ac.nowcoder.com','www.luogu.com.cn','luogu.com.cn'].includes(location.hostname)))return null;
 COMPILER_SELECTION
 NOWCODER_RECEIPTS
+LUOGU_RECEIPTS
 const ncReceipt=installNowcoderReceipts(ctx);
+const lgReceipt=installLuoguReceipts(ctx);
 
 const send=value=>{chrome.webview.postMessage(JSON.stringify({tbOfficial:true,sessionId:ctx.sessionId,...value}));return value;};
 const visible=e=>e&&e.getClientRects().length>0;
 const editors=()=>[...document.querySelectorAll('textarea')].filter(e=>/source|code|editor/i.test((e.name||'')+' '+(e.id||'')));
-const hasEditor=()=>editors().length||document.querySelector('.CodeMirror,.ace_editor,.monaco-editor');
+const hasEditor=()=>editors().length||document.querySelector('.CodeMirror,.cm-editor,.ace_editor,.monaco-editor');
 const login=()=>[...document.querySelectorAll('input[type=password]')].some(visible)||/\/login|\/enter(?:\/|$)|\/auth\/login/i.test(location.pathname);
+function luoguLoggedOut(){
+if(ctx.platform!=='洛谷')return false;
+try{const data=JSON.parse(document.querySelector('#lentille-context')?.textContent||'null');if(data&&Object.prototype.hasOwnProperty.call(data,'user'))return data.user===null;}catch{}
+const legacy=window._feInjection;if(legacy&&Object.prototype.hasOwnProperty.call(legacy,'currentUser'))return !legacy.currentUser;
+return false;
+}
 const verification=()=>!hasEditor()&&(/just a moment|checking your browser|人机验证|安全验证|验证码/i.test(document.title+' '+(document.body?.innerText||'').slice(0,1200))||[...document.querySelectorAll('iframe')].some(e=>visible(e)&&/captcha|challenge/i.test(e.src)));
 function normal(text){
 text=(text||'').trim().replace(/_/g,' ').replace(/\s+/g,' ');
@@ -66,11 +79,33 @@ if(!/^\d+$/.test(id))return false;
 const previous=[...baseline].filter(value=>/^\d+$/.test(value));
 return !baseline.has(id)&&previous.every(value=>BigInt(id)>BigInt(value));
 }
+function cfOwner(doc=document){
+return [...doc.querySelectorAll('#header a[href],header a[href],.lang-chooser a[href]')].map(a=>{try{const url=new URL(a.getAttribute('href'),location.href);return url.origin===location.origin&&url.pathname.match(/^\/profile\/([A-Za-z0-9_.-]{1,64})\/?$/)?.[1]}catch{return null}}).find(Boolean)||'';
+}
+function myPaths(){
+const original=new URL(ctx.originalUrl),match=taskPath(original.pathname).match(/^\/(contest|gym)\/(\d+)\/problem\//);
+return match?[`/${match[1]}/${match[2]}/my`,...(match[1]==='contest'?['/problemset/my']:[])]:[];
+}
+async function myPage(path){
+const response=await fetch(path,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
+const final=new URL(response.url||path,location.href);
+if(!response.ok||final.origin!==location.origin||!myPaths().includes(final.pathname))return null;
+const doc=new DOMParser().parseFromString((await response.text()).slice(0,2000000),'text/html');
+if(/just a moment|checking your browser|人机验证|安全验证|验证码/i.test(doc.title+' '+(doc.body?.textContent||'').slice(0,1200))||doc.querySelector('input[type=password],iframe[src*=captcha],iframe[src*=challenge]'))return null;
+const table=doc.querySelector('table.status-frame-datatable')||[...doc.querySelectorAll('table')].find(t=>/submission|提交|status|verdict|结果|when/i.test([...t.querySelectorAll('th,tr:first-child td')].map(e=>e.textContent).join(' ')));
+return table?doc:null;
+}
+function receiptValue(receipt){return {status:receipt.verdict==='JUDGING'?'judging':'finished',submissionId:receipt.id,...(receipt.verdict==='JUDGING'?{}:{verdict:receipt.verdict}),message:receipt.verdict==='JUDGING'?'原站已接收，正在评测。':'本次提交结果：'+receipt.verdict};}
 function inspect(){
-if(login()||(ctx.platform==='牛客'&&window.globalInfo?.ownerId!=null&&Number(window.globalInfo.ownerId)<=0))return {status:'needs_login',message:'请先登录授权，完成后回到 TB 点击提交。'};
+if(login()||luoguLoggedOut()||(ctx.platform==='牛客'&&window.globalInfo?.ownerId!=null&&Number(window.globalInfo.ownerId)<=0))return {status:'needs_login',message:'请先登录授权，完成后回到 TB 点击提交。'};
 if(verification())return {status:'needs_verification',message:'官方要求验证，请完成验证后回到 TB 点击提交。'};
 if(ncReceipt?.receipt)return ncReceipt.receipt;
-if(ctx.attempted&&ctx.baselineKnown){const baseline=new Set(ctx.baseline||[]);const receipt=receipts().find(r=>newerReceipt(r.id,baseline));if(receipt?.verdict)return {status:receipt.verdict==='JUDGING'?'judging':'finished',submissionId:receipt.id,verdict:receipt.verdict==='JUDGING'?undefined:receipt.verdict,message:receipt.verdict==='JUDGING'?'原站已接收，正在评测。':'已读取原站本次新提交结果：'+receipt.verdict};}
+if(lgReceipt?.receipt)return lgReceipt.receipt;
+if(ctx.platform==='Codeforces'&&ctx.attempted&&/\/submit$/.test(location.pathname)){
+const errors=[...document.querySelectorAll('span.error,.error-message,.submit-error')].filter(visible).map(e=>e.textContent.trim()).filter(Boolean);
+if(errors.length)return {status:'error',attempted:false,message:'Codeforces 未受理代码：'+errors.join('；').slice(0,200)};
+}
+if(ctx.attempted&&ctx.baselineKnown){const baseline=new Set(ctx.baseline||[]);const receipt=receipts().find(r=>newerReceipt(r.id,baseline)&&(!ctx.submissionId||r.id===ctx.submissionId));if(receipt?.verdict)return receiptValue(receipt);}
 return hasEditor()?{status:ctx.attempted?'submitted':'ready',message:ctx.attempted?'提交操作已发出，等待可靠原站回执；暂不宣称通过。':'官方编辑器已就绪；提交使用原站正常控件。'}:{status:ctx.attempted?'submitted':'loading',message:ctx.attempted?'等待原站回执；无可靠结果时不宣称通过。':'正在加载原站，可在当前面板登录或进入提交页。'};
 }
 async function submit(){
@@ -84,42 +119,58 @@ const compiler=await selectOfficialCompiler(ctx.code,ctx.platform);
 if(!compiler)return send({status:'error',message:'没有找到支持当前代码的 C++17 / C++20 / C++23 编译器，请在原站确认语言后重试。'});
 editors().forEach(e=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,ctx.code);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));filled++;});
 document.querySelectorAll('.CodeMirror').forEach(e=>{if(e.CodeMirror){e.CodeMirror.setValue(ctx.code);filled++;}});document.querySelectorAll('.ace_editor').forEach(e=>{try{if(window.ace){window.ace.edit(e).setValue(ctx.code,-1);filled++;}}catch{}});try{window.monaco?.editor?.getModels?.().filter(m=>!m.isDisposed()&&/cpp|c\+\+/.test(m.getLanguageId?.()||'')).forEach(m=>{m.setValue(ctx.code);filled++;});}catch{}
+document.querySelectorAll('.cm-editor .cm-content').forEach(e=>{const view=e.cmView?.view;if(view?.state?.doc&&view?.dispatch){view.dispatch({changes:{from:0,to:view.state.doc.length,insert:ctx.code}});filled++;}});
 if(!filled)return send({status:'error',message:'编辑器接口不可用，请手动粘贴并提交；未发出自动提交。'});
 let baseline=[],baselineKnown=false,baselineOwner='';
 if(ctx.platform==='Codeforces'){
-const profile=[...document.querySelectorAll('#header a[href],.lang-chooser a[href]')].map(a=>{try{const url=new URL(a.getAttribute('href'),location.href);return url.origin===location.origin&&url.pathname.match(/^\/profile\/([A-Za-z0-9_.-]{1,64})$/)?.[1]}catch{return null}}).find(Boolean);
-baselineOwner=profile||'';
+baselineOwner=cfOwner();
 }
-try{let path=null;if(ctx.platform==='AtCoder')path=location.pathname.replace(/\/submit$/,'/submissions/me');if(ctx.platform==='Codeforces')path=location.pathname.replace(/\/submit$/,'/my');if(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});if(r.ok&&new URL(r.url).origin===location.origin&&new URL(r.url).pathname===path){const html=await r.text();const doc=new DOMParser().parseFromString(html.slice(0,2000000),'text/html');const challenge=/just a moment|checking your browser|人机验证|安全验证|验证码/i.test(doc.title+' '+(doc.body?.textContent||'').slice(0,1200));const table=doc.querySelector('table.status-frame-datatable')||[...doc.querySelectorAll('table')].some(t=>/submission|提出|提交|status|verdict|結果|时间|when/i.test([...t.querySelectorAll('th, tr:first-child td')].map(e=>e.textContent).join(' ')));if(!challenge&&table&&!doc.querySelector('input[type=password],iframe[src*=captcha],iframe[src*=challenge]')){baseline=receipts(doc).map(r=>r.id);baselineKnown=true;}}}}catch{}
+if(ctx.platform==='Codeforces'){
+for(const path of myPaths()){try{const doc=await myPage(path);if(!doc)continue;baselineOwner=baselineOwner||cfOwner(doc);baseline=[...doc.querySelectorAll('a[href]')].map(a=>(a.getAttribute('href')||'').match(/\/submission\/(\d+)/)?.[1]).filter(Boolean);baselineKnown=true;break;}catch{}}
+}else{
+try{let path=null;if(ctx.platform==='AtCoder')path=location.pathname.replace(/\/submit$/,'/submissions/me');if(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});if(r.ok&&new URL(r.url).origin===location.origin&&new URL(r.url).pathname===path){const html=await r.text();const doc=new DOMParser().parseFromString(html.slice(0,2000000),'text/html');const challenge=/just a moment|checking your browser|人机验证|安全验证|验证码/i.test(doc.title+' '+(doc.body?.textContent||'').slice(0,1200));const table=[...doc.querySelectorAll('table')].some(t=>/submission|提出|提交|status|verdict|結果|时间|when/i.test([...t.querySelectorAll('th, tr:first-child td')].map(e=>e.textContent).join(' ')));if(!challenge&&table&&!doc.querySelector('input[type=password],iframe[src*=captcha],iframe[src*=challenge]')){baseline=receipts(doc).map(r=>r.id);baselineKnown=true;}}}}catch{}
+}
 // The official public API provides a bounded snapshot when the HTML list is
 // unavailable. Only the authenticated page's own handle is used. A global ID
 // lower bound prevents older records outside this snapshot from becoming AC.
 if(ctx.platform==='Codeforces'&&!baselineKnown&&baselineOwner){
 try{const r=await fetch('/api/user.status?handle='+encodeURIComponent(baselineOwner)+'&from=1&count=100',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});if(r.ok){const value=await r.json();if(value.status==='OK'&&Array.isArray(value.result)&&value.result.every(row=>Number.isSafeInteger(row.id)&&row.id>0)){baseline=value.result.map(row=>String(row.id));baselineKnown=true;}}}catch{}
 }
-const form=editors().map(e=>e.closest('form')).find(Boolean)||[...document.querySelectorAll('form')].find(f=>f.querySelector('.CodeMirror,.ace_editor,.monaco-editor'));
+if(ctx.platform==='Codeforces'&&!baselineKnown)return send({status:'error',message:'暂时无法读取本账号的提交记录。请打开原站完成登录或验证，再重试提交。'});
+const form=editors().map(e=>e.closest('form')).find(Boolean)||[...document.querySelectorAll('form')].find(f=>f.querySelector('.CodeMirror,.cm-editor,.ace_editor,.monaco-editor'));
 let button=form?.querySelector('button[type=submit],input[type=submit],#submit');if(!button&&['牛客','洛谷'].includes(ctx.platform))button=[...document.querySelectorAll('button,[role=button],.submit-btn,.submit-button')].find(b=>visible(b)&&!b.disabled&&/^(?:保存并)?提交(?:代码|题目|评测)?$/.test(b.textContent.trim()));
 if(!button)return send({status:'error',message:'未找到与代码编辑器对应的官方提交控件，请手动提交；未点击其它按钮。'});
 if(ncReceipt){ncReceipt.armed=true;ncReceipt.pending=null;ncReceipt.receipt=null;}
+if(lgReceipt){lgReceipt.armed=true;lgReceipt.pending=null;lgReceipt.receipt=null;}
 send({status:'submitted',message:'已选择 '+compiler.label+(baselineKnown||ncReceipt?'，等待原站回执。':'；已发出官方提交，但暂未取得可核对的提交记录，请在原站查看结果。'),compiler:compiler.label,baseline,baselineKnown,baselineOwner,attempted:true});button.click();return {status:'submitted'};
 }
+if(action==='observe')return null;
 if(action==='submit'){submit().catch(e=>send({status:'error',message:'表单操作未完成：'+String(e).slice(0,160)}));return {status:'loading'};}
 const state=inspect();
-if(ctx.platform==='Codeforces'&&ctx.attempted&&ctx.baselineKnown&&ctx.baselineOwner&&state.status!=='finished'){
+if(ctx.attempted&&ncReceipt)ncReceipt.poll();
+if(ctx.attempted&&lgReceipt)lgReceipt.poll();
+if(ctx.platform==='Codeforces'&&ctx.attempted&&ctx.baselineKnown&&state.status!=='finished'){
+  const owner=ctx.baselineOwner||cfOwner();
   (async()=>{try{
-    const response=await fetch('/api/user.status?handle='+encodeURIComponent(ctx.baselineOwner)+'&from=1&count=100',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
+    // A hidden CF page may stop updating its live verdict cells. Read a fresh
+    // authenticated list as well as the public API instead of waiting for DOM.
+    for(const path of myPaths()){
+      try{const doc=await myPage(path);if(!doc)continue;const candidate=receipts(doc).find(row=>newerReceipt(row.id,new Set(ctx.baseline||[]))&&(!ctx.submissionId||row.id===ctx.submissionId));if(candidate?.verdict){send(receiptValue(candidate));return;}}catch{}
+    }
+    if(!owner)return;
+    const response=await fetch('/api/user.status?handle='+encodeURIComponent(owner)+'&from=1&count=100',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
     if(!response.ok||new URL(response.url,location.href).origin!==location.origin)return;
     const value=await response.json(),original=new URL(ctx.originalUrl),match=taskPath(original.pathname).match(/^\/(?:contest|gym)\/(\d+)\/problem\/([A-Za-z]\d?)$/);
     if(value.status!=='OK'||!Array.isArray(value.result)||!match)return;
     const baseline=new Set(ctx.baseline||[]);
-    const receipt=value.result.filter(row=>Number.isSafeInteger(row.id)&&newerReceipt(String(row.id),baseline)&&String(row.problem?.contestId)===match[1]&&row.problem?.index===match[2]&&row.author?.members?.some(member=>member.handle?.toLowerCase()===ctx.baselineOwner.toLowerCase())).sort((a,b)=>a.id-b.id)[0];
+    const receipt=value.result.filter(row=>Number.isSafeInteger(row.id)&&newerReceipt(String(row.id),baseline)&&(!ctx.submissionId||String(row.id)===ctx.submissionId)&&String(row.problem?.contestId)===match[1]&&row.problem?.index.toUpperCase()===match[2].toUpperCase()&&row.author?.members?.some(member=>member.handle?.toLowerCase()===owner.toLowerCase())).sort((a,b)=>a.id-b.id)[0];
     if(!receipt)return;
     const verdict=normal(receipt.verdict)||'JUDGING';
     send({status:verdict==='JUDGING'?'judging':'finished',submissionId:String(receipt.id),...(verdict==='JUDGING'?{}:{verdict}),message:verdict==='JUDGING'?'原站已接收，正在评测。':'已读取原站本次新提交结果：'+verdict});
   }catch{}})();
 }
 return state;
-})()'''.replace('COMPILER_SELECTION',languages,1).replace('NOWCODER_RECEIPTS',nowcoder,1).replace('ACTION',json.dumps(action),1).replace('CONTEXT',context,1)
+})()'''.replace('COMPILER_SELECTION',languages,1).replace('NOWCODER_RECEIPTS',nowcoder,1).replace('LUOGU_RECEIPTS',luogu,1).replace('ACTION',json.dumps(action),1).replace('CONTEXT',context,1)
 
 
 class OfficialBridge:
@@ -176,6 +227,8 @@ class OfficialBridge:
             if session.get('attempted') and value.get('status') in ('ready', 'loading'):
                 return
             if session.get('submitting') and value.get('status') == 'ready':
+                return
+            if session['status'] == 'judging' and value.get('status') == 'submitted':
                 return
             if value.get('attempted') or value.get('status') in ('needs_login', 'needs_verification', 'error'):
                 session['submitting'] = False
@@ -345,7 +398,18 @@ class OfficialBridge:
             core.NewWindowRequested += popup
             if self.native_setup:
                 self.native_setup(view)
-            core.Navigate(session['url'])
+            # Install request observers before page scripts can cache fetch/XHR.
+            # Registration must finish before the first navigation (WebView2 is
+            # asynchronous); blocking its UI thread here would deadlock.
+            from System import Action, String
+            from System.Threading.Tasks import Task
+            def registered(task):
+                try:
+                    task.Result
+                    self._ui(lambda: core.Navigate(session['url']))
+                except Exception:
+                    self._update(identity, {'status': 'error', 'message': '原站回执监听初始化失败，请重试。'})
+            core.AddScriptToExecuteOnDocumentCreatedAsync(page_script(dict(session), 'observe')).ContinueWith(Action[Task[String]](registered))
         view.CoreWebView2InitializationCompleted += initialized
         view.NavigationCompleted += loaded
         view.EnsureCoreWebView2Async(form.browser.webview.CoreWebView2.Environment)
@@ -393,6 +457,10 @@ class OfficialBridge:
             with self.lock:
                 self.sessions[existing]['intent'] = False
             threading.Thread(target=self._try_submit, args=(existing,), daemon=True).start()
+        elif intent and not session.get('attempted') and not session.get('submitting'):
+            # Logging in can leave the WebView at /, /auth/login, or a profile.
+            # Return to the exact problem before arming its native form.
+            self._ui(lambda: self.views[existing]['view'].CoreWebView2.Navigate(session['url']))
         return self.status(existing, inspect=False)
 
     def open(self, url, code, title):
@@ -432,7 +500,7 @@ class OfficialBridge:
         self.main_window.native.browser.webview.Visible = False
         session = self.sessions[identity]
         if session['status'] in ('needs_login', 'needs_verification'):
-            entry['view'].CoreWebView2.Navigate(session['url'])
+            entry['view'].CoreWebView2.Navigate(session['loginUrl'] if session['status'] == 'needs_login' else session['url'])
 
     def close(self, identity=None):
         from training import ServiceError

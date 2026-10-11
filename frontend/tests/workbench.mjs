@@ -9,6 +9,11 @@ const server = await createServer({ root, server: { host: '127.0.0.1', port: 187
 await server.listen();
 const browser = await chromium.launch({ channel: process.env.CI ? undefined : 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 1050, height: 700 } });
+await page.addInitScript(() => {
+  window.acceptedTones = 0;
+  const create = AudioContext.prototype.createOscillator;
+  AudioContext.prototype.createOscillator = function() { window.acceptedTones++; return create.apply(this, arguments); };
+});
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 try {
@@ -113,15 +118,24 @@ try {
   await page.getByText('登录成功，可以提交。', { exact: true }).waitFor();
   await page.getByRole('button', { name: '提交', exact: true }).click();
   await page.evaluate(() => { window.workbenchFixture.officialStatus = 'judging'; });
-  await page.getByText('官方评测中', { exact: true }).waitFor();
+  await page.getByText('评测中', { exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '提交', exact: true }).isDisabled(), true);
   const beforeDuplicate = await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'official/submit').length);
   await editor.press('Control+Enter');
   assert.equal(await page.evaluate(() => window.workbenchFixture.calls.filter(call => call.path === 'official/submit').length), beforeDuplicate);
   assert.equal(await editor.isVisible(), true, 'editor stays available while official judging');
+  assert.equal(await page.evaluate(() => window.acceptedTones), 0, 'samples, WA, login and pending do not play the AC sound');
   await page.evaluate(() => { window.workbenchFixture.officialStatus = 'finished'; });
-  await page.waitForFunction(() => document.querySelector('.wb-result-summary')?.textContent.includes('官方 AC'));
+  await page.waitForFunction(() => document.querySelector('.wb-result-summary .wb-verdict-confirmed')?.textContent.trim() === 'AC');
   await page.waitForFunction(() => window.workbenchFixture.progress.length === 1);
+  assert.ok(await page.locator('.wb-result-summary .wb-verdict-confirmed').evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 32));
+  assert.equal(await page.evaluate(() => window.acceptedTones), 4, 'one confirmed AC plays one four-note chime');
+  assert.equal(await page.locator('.wb-result-summary').textContent().then(value => value.includes('官方')), false);
+  await page.waitForTimeout(1200);
+  assert.equal(await page.evaluate(() => window.acceptedTones), 4, 'repeat receipt polling does not replay the sound');
+  await page.getByRole('button', { name: /^记录/ }).click();
+  await page.locator('.wb-history-main').first().click();
+  assert.equal(await page.evaluate(() => window.acceptedTones), 4, 'viewing an accepted history record stays silent');
 
   // Button Enter must remain a native click, not a preview toggle/global key.
   const solution = page.getByRole('button', { name: '题解', exact: true });
@@ -157,7 +171,7 @@ try {
   await editor.fill('int main() { return 0; }');
   await editor.press('Control+Enter');
   await page.evaluate(() => { window.workbenchFixture.officialStatus = 'finished'; });
-  await page.waitForFunction(() => document.querySelector('.wb-result-summary')?.textContent.includes('官方 AC'));
+  await page.waitForFunction(() => document.querySelector('.wb-result-summary')?.textContent.includes('AC'));
   await page.waitForFunction(() => window.workbenchFixture.progress.length === 2);
   assert.equal(await page.evaluate(() => window.workbenchFixture.progress.at(-1).summary.accepted), 1);
   await editor.fill('unsaved edit before restoring history');
